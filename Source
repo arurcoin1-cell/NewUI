@@ -525,20 +525,39 @@
             }); 
 
             local items = cfg.items; do
-                items[ "main" ] = library:create( "Frame" , {
                     Parent = library[ "items" ];
                     Size = cfg.size;
                     Name = "\0";
-                    Position = dim2(0.5, -cfg.size.X.Offset / 2, 0.5, -cfg.size.Y.Offset / 2);
+                    AnchorPoint = vec2(0.5, 0.5);
+                    Position = dim2(0.5, 0, 0.5, 0);
                     BorderColor3 = rgb(0, 0, 0);
                     BorderSizePixel = 0;
                     BackgroundColor3 = rgb(14, 14, 16)
-                }); items[ "main" ].Position = dim2(0, items[ "main" ].AbsolutePosition.X, 0, items[ "main" ].AbsolutePosition.Y)
+                }); -- removed absolute position freeze
                 
                 if uis.TouchEnabled then
+                    local toggle_btn = library:create("TextButton", {
+                        Parent = library["items"],
+                        Size = dim2(0, 48, 0, 48),
+                        Position = dim2(0.5, -24, 0.05, 0),
+                        BackgroundColor3 = rgb(30, 30, 35),
+                        Text = "A",
+                        TextColor3 = rgb(255, 255, 255),
+                        Font = Enum.Font.GothamBold,
+                        Visible = true,
+                        ZIndex = 1000,
+                        ClipsDescendants = true
+                    })
+                    library:create("UICorner", {Parent = toggle_btn, CornerRadius = dim(1, 0)})
+                    library:create("UIStroke", {Parent = toggle_btn, Color = themes.preset.accent, Thickness = 2})
+                    
+                    toggle_btn.MouseButton1Click:Connect(function()
+                        items["main"].Visible = not items["main"].Visible
+                    end)
+                    
                     library:create("UIScale", {
                         Parent = items["main"],
-                        Scale = math.clamp(camera.ViewportSize.Y / 650, 0.45, 1)
+                        Scale = math.clamp(camera.ViewportSize.Y / 750, 0.45, 0.95)
                     })
                 end
                 
