@@ -1,7 +1,7 @@
 if not game:IsLoaded() then game.Loaded:Wait() end
 repeat task.wait() until game:GetService("Players").LocalPlayer and game:GetService("Players").LocalPlayer.Character and game:GetService("Players").LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
 
-local library = loadstring(game:HttpGet("https://raw.githubusercontent.com/arurcoin1-cell/NewUI/refs/heads/main/Source?t=" .. tick()))()
+local library = loadstring(game:HttpGet("https://raw.githubusercontent.com/arurcoin1-cell/NewUI/main/Source?t=" .. tick()))()
 -- [ FIX FOR INTERNAL LIBRARY ERRORS ] --
 -- If the library's internal code refers to a global 'library' variable, ensure it exists.
 if getgenv().library and not _G.library then _G.library = getgenv().library end
@@ -976,20 +976,6 @@ mt.__namecall = function(self, ...)
     local method = getnamecallmethod()
     local args = { ... }
 
-    -- [ PASSIVE THIEF: UNIVERSAL CALIBRATION ] --
-    -- If the Actor-Breach fails, we catch the first manual shot to steal the mapping!
-    if not _G.ArurHubMapping and not _G.ArurHubIsShooting then
-        if self.Name == "ShootingEvent" and (method == "FireServer" or method == "fireServer") then
-            -- Pattern: Number (Power), Table (Mapping), String (Code)
-            if typeof(args[1]) == "number" and typeof(args[2]) == "table" and #args[2] == 6 and typeof(args[3]) == "string" then
-                _G.ArurHubMapping = args[2]
-                _G.ArurHubCode = args[3]
-                warn("!!! ARURHUB: Calibration Success from Manual Interception !!!")
-                SendNotification("Aimbot Calibrated! [Code: " .. tostring(args[3]) .. "]", 5, Color3.fromRGB(0, 255, 127))
-            end
-        end
-    end
-
     if AntiTravelEnabled and method == 'FireServer' then
         if self.Name == 'sbEvent' and args[1] == 'Travel' then
             return nil
@@ -1160,18 +1146,7 @@ aim_sec:dropdown({
 aim_sec:slider({
     name = "Jump Wait Time",
     min = 0.05, max = 0.4, default = 0.25, interval = 0.001,
-    callback = function(v) ArurHubData.JumpWaitTime = v end
-})
-
-aim_sec:button({
-    name = "Force Recover Aimbot",
-    callback = function()
-        SendNotification("Attempting manual breach...", 3, Color3.fromRGB(220, 20, 60))
-        task.spawn(function()
-            -- Trigger the global breach logic again
-            fireActorBreach()
-        end)
-    end
+    callback = function(v) ArurHubData.JumpWaitTime = v end,
 })
 
 aim_sec:toggle({
@@ -2160,104 +2135,61 @@ oob_sec:toggle({
 
 -- [ MAIN LOOPS ] --
 -- [ BRAIN STEALER: One-Time Actor Breach on Execute ]
-local function fireActorBreach()
-    print("[ARURHUB] Initiating Actor-Breach Sequence...")
-    if not getactors or not run_on_actor or not create_comm_channel then
-        warn("!!! ARURHUB: Your executor does not support necessary Actor functions for Aimbot !!!")
+_G.ArurHubMapping = {"X2", "Y1", "X1", "Y2", "Z2", "Z1"}
+_G.ArurHubCode = "Oh yeah yeah"
+
+task.spawn(function()
+    print("[ARURHUB] Initiating Universal Actor-Breach Sequence...")
+    local actors = getactors()
+    if #actors == 0 then
+        warn("No Actors found. ArurHub will use built-in fallbacks.")
         return
     end
-
-    -- 1.5-Second Discovery Buffer
-    task.wait(1.5)
-
-    -- Using Volt/Delta comms to escape isolation!
+    
     local id, channel = create_comm_channel()
     channel.Event:Connect(function(mapping, code)
-        if not _G.ArurHubMapping then
-            warn("!!! ARURHUB BREACH: Mapping Stolen Successfully !!!")
-            warn("!!! CODE: " .. tostring(code) .. " !!!")
-            _G.ArurHubMapping = mapping
-            _G.ArurHubCode = code
-            SendNotification("Aimbot Calibrated! [Code: " .. tostring(code) .. "]", 5, Color3.fromRGB(0, 255, 127))
-        end
+        if _G.ArurHubMapping and #_G.ArurHubMapping == 6 and mapping[1] == _G.ArurHubMapping[1] then return end
+        _G.ArurHubMapping = mapping
+        _G.ArurHubCode = code
+        warn("!!! ARURHUB BREACH: Mapping Stolen Successfully via Multi-Actor Scan !!!")
+        print("Mapping:", table.concat(_G.ArurHubMapping, ", "), "| Code:", _G.ArurHubCode)
     end)
 
-    local actorsFound = getactors()
-    if getnilinstances then
-        for _, v in pairs(getnilinstances()) do if v:IsA("Actor") then table.insert(actorsFound, v) end end
-    end
-    print("Hyper-Scanning " .. #actorsFound .. " potential shooting actors...")
-
-    for _, actor in ipairs(actorsFound) do
-        if typeof(actor) == "Instance" then
-            task.spawn(function()
-                pcall(run_on_actor, actor, [[
-                    local channelId = ...
-                    local channel = get_comm_channel(channelId)
-                    local shootRem = game:GetService("ReplicatedStorage").Remotes:FindFirstChild("ShootingEvent")
-                    
-                    if not channel then return end
-
-                    -- THE COBALT METHOD: Hooking the Actor's metatable directly!
-                    -- This catches the encryption even if Delta isolates the memory.
-                    local mt = getrawmetatable(game)
-                    local oldNamecall = mt.__namecall
-                    setreadonly(mt, false)
-                    mt.__namecall = newcclosure(function(self, ...)
-                        local method = getnamecallmethod()
-                        if rawequal(self, shootRem) and (method == "FireServer" or method == "fireServer") then
-                            local args = { ... }
-                            if typeof(args[1]) == "number" and typeof(args[2]) == "table" and #args[2] == 6 then
-                                channel:Fire(args[2], args[3])
-                            end
-                        end
-                        return oldNamecall(self, ...)
-                    end)
-                    setreadonly(mt, true)
-                    
-                    local function check(f)
-                        if typeof(f) == "function" and islclosure(f) then
-                            local name = debug.info(f, "n")
-                            local s, c = pcall(debug.getconstants, f)
-                            local isShoot = (name == "ActivatedShoot") or (s and c and table.find(c, "FireServer"))
-                            
-                            if isShoot then
-                                local u = debug.getupvalues(f)
-                                for _, up in pairs(u) do
-                                    if typeof(up) == "table" and #up == 6 then
-                                        local code = "Ahoy"
-                                        for _, pc in pairs(u) do
-                                            if typeof(pc) == "string" and #pc > 3 then code = pc end
-                                        end
-                                        channel:Fire(up, code)
-                                        return true
+    local scannerCode = [[
+        local channelId = ...
+        local channel = get_comm_channel(channelId)
+        
+        for _, v in pairs(getgc(true)) do
+            if typeof(v) == "function" and islclosure(v) then 
+                local success, consts = pcall(debug.getconstants, v)
+                if success and consts and table.find(consts, "FireServer") then
+                    local upvals = debug.getupvalues(v)
+                    for _, up in pairs(upvals) do
+                        if typeof(up) == "table" and #up == 6 then
+                            -- Confirm it's the right mapping (X1-Z2 pattern)
+                            if typeof(up[1]) == "string" and up[1]:match("[XYZ][12]") then
+                                local secretCode = "Oh yeah yeah"
+                                for _, sc in pairs(upvals) do
+                                    if typeof(sc) == "string" and #sc > 3 and not sc:find("Server") then
+                                        secretCode = sc
                                     end
                                 end
+                                channel:Fire(up, secretCode)
+                                return
                             end
                         end
-                        return false
                     end
-
-                    -- Backup: Memory Scan
-                    for _, v in pairs(getgc(true)) do if check(v) then return end end
-                    local reg = (debug.getregistry or getregistry or function() return {} end)()
-                    for _, v in pairs(reg) do if check(v) then return end end
-                ]], id)
-            end)
+                end
+            end
         end
-        if _G.ArurHubMapping then break end
-    end
-        
-    -- Wait for the Event to fire
-    local start = tick()
-    while not _G.ArurHubMapping and tick() - start < 7.0 do task.wait(0.2) end
-    
-    if not _G.ArurHubMapping then
-        print("!!! ARURHUB: Startup breach failed. Waiting for first manual throw to calibrate... !!!")
-    end
-end
+    ]]
 
-task.spawn(fireActorBreach)
+    for _, actor in pairs(actors) do
+        if typeof(actor) == "Instance" then
+            pcall(run_on_actor, actor, scannerCode, id)
+        end
+    end
+end)
 
 local function onJump()
     if not ArurHubData.AimbotEnabled or not hasBall() then return end
