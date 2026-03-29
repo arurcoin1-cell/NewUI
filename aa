@@ -1,7 +1,7 @@
 if not game:IsLoaded() then game.Loaded:Wait() end
 repeat task.wait() until game:GetService("Players").LocalPlayer and game:GetService("Players").LocalPlayer.Character and game:GetService("Players").LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
 
-local library = loadstring(game:HttpGet("https://raw.githubusercontent.com/arurcoin1-cell/NewUI/main/Source?t=" .. tick()))()
+local library = loadstring(readfile("Millenial_UI.lua"))()
 -- [ FIX FOR INTERNAL LIBRARY ERRORS ] --
 -- If the library's internal code refers to a global 'library' variable, ensure it exists.
 if getgenv().library and not _G.library then _G.library = getgenv().library end
@@ -2134,94 +2134,86 @@ oob_sec:toggle({
 })
 
 -- [ MAIN LOOPS ] --
--- [ BRAIN STEALER: Universal Breach on Execute ]
-_G.ArurHubMapping = nil 
+-- [ BRAIN STEALER: One-Time Actor Breach on Execute ]
+_G.ArurHubMapping = nil
 _G.ArurHubCode = "Ahoy"
 
 task.spawn(function()
-    local execName = identifyexecutor and identifyexecutor() or "Unknown"
-    local isMobileExec = execName:find("Delta") or execName:find("Seliware") or execName:find("Volcano")
-    local HttpService = game:GetService("HttpService")
-    
-    print("[ARURHUB] Initiating Serialized Breach (" .. execName .. ")...")
-    
-    local targets = getactors()
-    if #targets == 0 then
-        for _, v in pairs(game:GetDescendants()) do
-            if v:IsA("Actor") then table.insert(targets, v) end
+    print("[ARURHUB] Initiating Actor-Breach Sequence...")
+    local targetActor
+
+    for _, actor in pairs(getactors()) do
+        if typeof(actor) == "Instance" then
+            local name = actor:GetFullName()
+            if name:find("PlayerGui") then
+                targetActor = actor
+                print("Found Actor:", name)
+                break
+            end
         end
     end
 
-    -- 1. Serialized Scan Source (JSON Bridge)
-    local scanSource = [[
-        local HttpService = game:GetService("HttpService")
+    if not targetActor then
+        warn("No Actor found")
+        return
+    end
+    
+    -- Using Volt's channel to escape the parallel isolation!
+    local id, channel = create_comm_channel()
+    channel.Event:Connect(function(mapping, code)
+        print("Received tracking data from Actor VM!")
+        _G.ArurHubMapping = mapping
+        _G.ArurHubCode = code
+    end)
+
+    -- run inside actor
+    run_on_actor(targetActor, [[
+        local channelId = ...
+        local channel = get_comm_channel(channelId)
+        print("Running inside Actor...")
+
         for _, v in pairs(getgc(true)) do
             if typeof(v) == "function" and islclosure(v) then 
-                local upvals = debug.getupvalues(v)
-                for _, up in pairs(upvals) do
-                    -- Signature: 6-index table of numbers (Jump Mapping)
-                    if typeof(up) == "table" and #up == 6 then
-                        local hasMapping = true
-                        for _, val in pairs(up) do if typeof(val) ~= "number" then hasMapping = false break end end
-                        
-                        if hasMapping then
-                            local code = "Ahoy"
-                            for _, cVal in pairs(upvals) do
-                                if typeof(cVal) == "string" and #cVal > 3 then code = cVal end
+
+                local success, consts = pcall(debug.getconstants, v)
+
+                if success and consts and table.find(consts, "FireServer") then
+                    local upvals = debug.getupvalues(v)
+
+                    for _, up in pairs(upvals) do
+                        if typeof(up) == "table" and #up == 6 then
+                            print("=== ORDER FOUND ===")
+                            for i, val in ipairs(up) do
+                                print(i, val)
                             end
-                            -- SERIALIZE: Turn Table into Text for the "Jump"
-                            shared.ArurHubMapping_ST = HttpService:JSONEncode(up)
-                            shared.ArurHubCode_ST = code
+                            
+                            -- Grab the Secret Code from the same array
+                            local foundCode = "Ahoy"
+                            for _, possibleCode in pairs(upvals) do
+                                if typeof(possibleCode) == "string" and #possibleCode > 3 then
+                                    foundCode = possibleCode
+                                end
+                            end
+                            
+                            -- Send to the Main Thread!
+                            channel:Fire(up, foundCode)
                             return
                         end
                     end
                 end
             end
         end
-    ]]
-
-    -- 2. Execute Breach (Deep Sweep)
-    for _, actor in pairs(targets) do
-        if _G.ArurHubMapping or shared.ArurHubMapping_ST then break end
-        pcall(function() run_on_actor(actor, scanSource) end)
-    end
-    
-    -- 3. Main Thread Deserialize
+    ]], id)
+        
+    -- Wait for the Event to fire
     local start = tick()
-    while not shared.ArurHubMapping_ST and tick() - start < 3.0 do task.wait(0.1) end
-
-    if shared.ArurHubMapping_ST then
-        print("[ARURHUB] Serialized Data Intercepted - Decoding...")
-        local success, decoded = pcall(HttpService.JSONDecode, HttpService, shared.ArurHubMapping_ST)
-        if success and typeof(decoded) == "table" then
-            _G.ArurHubMapping = decoded
-            _G.ArurHubCode = shared.ArurHubCode_ST
-        end
-    end
-
-    -- 4. Emergency Fallback: Main Thread Scan
-    if not _G.ArurHubMapping then
-        for _, v in pairs(getgc(true)) do
-            if typeof(v) == "function" and islclosure(v) then 
-                local upvals = debug.getupvalues(v)
-                for _, up in pairs(upvals) do
-                    if typeof(up) == "table" and #up == 6 then
-                        _G.ArurHubMapping = up
-                        for _, val in pairs(upvals) do if typeof(val) == "string" and #val > 3 then _G.ArurHubCode = val end end
-                        break
-                    end
-                end
-            end
-            if _G.ArurHubMapping then break end
-        end
-    end
+    while not _G.ArurHubMapping and tick() - start < 3.0 do task.wait(0.1) end
     
-    -- 5. Final Notification
     if _G.ArurHubMapping then
-        warn("!!! ARURHUB BREACH: Serialized Mapping Stolen !!!")
-        print("Final Order [" .. execName .. "]:", table.concat(_G.ArurHubMapping, ", "))
+        warn("!!! ARURHUB BREACH: Mapping Stolen Successfully !!!")
+        print("Mapping:", table.concat(_G.ArurHubMapping, ", "), "| Code:", _G.ArurHubCode)
     else
-        warn("!!! ARURHUB BREACH FAILED: Could not decode jump parameters on this platform !!!")
+        warn("!!! ARURHUB BREACH FAILED: Could not decode jump parameters inside actor !!!")
     end
 end)
 
