@@ -1,7 +1,7 @@
 if not game:IsLoaded() then game.Loaded:Wait() end
 repeat task.wait() until game:GetService("Players").LocalPlayer and game:GetService("Players").LocalPlayer.Character and game:GetService("Players").LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
 
-local library = loadstring(game:HttpGet("https://raw.githubusercontent.com/arurcoin1-cell/NewUI/refs/heads/main/Source?t=" .. tick()))()
+local library = loadstring(game:HttpGet("https://raw.githubusercontent.com/arurcoin1-cell/NewUI/main/Source?t=" .. tick()))()
 -- [ FIX FOR INTERNAL LIBRARY ERRORS ] --
 -- If the library's internal code refers to a global 'library' variable, ensure it exists.
 if getgenv().library and not _G.library then _G.library = getgenv().library end
@@ -52,21 +52,7 @@ if not arurHubGui then
     arurHubGui.Parent = playerGui
 end
 
--- State Variables (Aimbot)
-local AimbotEnabled = false
-local AimbotMode = "Low Arc" 
-local randomizeWait = false
-local jumpWaitTime = 0.25
-local xOffset = 0
-local TeamGoalCheckEnabled = false
-local TeamSide = nil
-local selfPassDirection = "Camera"
-local InRangeColor = Color3.new(0, 1, 0)
-local OutRangeColor = Color3.new(1, 0, 0)
-
 -- Stats Tracking
-local ShootingStatsEnabled = false
-local SessionOnlyStats = true
 local sessionMade, sessionTotal = 0, 0
 local lastGameMade, lastGameTotal = nil, nil
 
@@ -76,6 +62,12 @@ statsGui.Name = "ArurHubStats"
 statsGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
 statsGui.ResetOnSpawn = false
 statsGui.Enabled = false
+
+-- Mobile Scaling
+if isMobile or uis.TouchEnabled then
+    local uiScale = Instance.new("UIScale", statsGui)
+    uiScale.Scale = math.clamp(camera.ViewportSize.Y / 750, 0.5, 0.9) -- Dynamic scaling matching library
+end
 
 local ACCENT = Color3.fromRGB(148, 143, 214)
 local CARD_BG = Color3.fromRGB(15, 15, 19)
@@ -163,10 +155,11 @@ fgBarFill.BorderSizePixel = 0
 Instance.new("UICorner", fgBarFill).CornerRadius = UDim.new(1, 0)
 
 -- Custom drag: fixes teleport by converting to pure offsets before dragging
+-- [ TOUCH SUPPORTED ] --
 do
     local dragging, dragStart, startPos = false, nil, nil
     statsDragHeader.InputBegan:Connect(function(input)
-        if input.UserInputType == Enum.UserInputType.MouseButton1 then
+        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
             dragging = true
             local abs = statsFrame.AbsolutePosition
             statsFrame.Position = UDim2.fromOffset(abs.X, abs.Y)
@@ -175,13 +168,13 @@ do
         end
     end)
     uis.InputChanged:Connect(function(input)
-        if dragging and input.UserInputType == Enum.UserInputType.MouseMovement then
+        if dragging and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
             local delta = input.Position - dragStart
             statsFrame.Position = UDim2.fromOffset(startPos.X.Offset + delta.X, startPos.Y.Offset + delta.Y)
         end
     end)
     uis.InputEnded:Connect(function(input)
-        if input.UserInputType == Enum.UserInputType.MouseButton1 then
+        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
             dragging = false
         end
     end)
@@ -235,27 +228,82 @@ task.spawn(function()
 end)
 
 -- State Variables (Visuals)
-local ShowRange = false
-local OnlyShowWithAimbot = true 
-local OnlyShowTrajWithAimbot = true
-local TrajectoryEnabled = false
-local TrajectoryMode = "Line"
-local TrajectoryColor = Color3.fromRGB(0, 255, 0)
-local TrajectoryTransparency = 0
-local TrajectoryStayDuration = 1.5
-local TrajectoryStopAtHoop = true
 local lastShotInfo = {time = 0, points = {}, mode = "Line", color = Color3.new(1,1,1), trans = 0}
 local dotPool = {}
-local beamPool = {}
-local attachmentPool = {}
-local traj_active = false
-local GRAVITY_CONSTANT = 28
-local dotParticleSets = {} -- dotParticleSets[i] = {pe1, pe2}
-local beamLayers = {}     -- beamLayers[layer] = {beam1..beam30}
-local attLayers = {}      -- attLayers[layer] = {{attA,attB}..}
+local dotParticleSets = {}
+local beamLayers = {}
+local attLayers = {}
 local NUM_BEAM_LAYERS = 3
 local NUM_PARTICLE_TYPES = 2
 local currentBeamStyle = "Plain"
+local traj_active = false
+
+-- [ RANGE UI & HIGHLIGHT SETUP ] --
+local rangeLabel = Instance.new("TextLabel", arurHubGui)
+rangeLabel.Name = "RangeLabel"
+rangeLabel.Size = UDim2.new(0, 200, 0, 50)
+rangeLabel.Position = UDim2.new(0.5, 0, 0.9, 0)
+rangeLabel.AnchorPoint = Vector2.new(0.5, 1)
+rangeLabel.BackgroundTransparency = 1
+rangeLabel.TextColor3 = Color3.new(1, 1, 1)
+rangeLabel.Font = Enum.Font.GothamBold
+rangeLabel.TextStrokeTransparency = 0.5
+rangeLabel.TextSize = 24
+rangeLabel.Visible = false
+
+local highlight = Instance.new("Highlight")
+highlight.Name = "ArurRangeHighlight"
+highlight.FillTransparency = 0.6
+highlight.OutlineTransparency = 0
+highlight.Enabled = false
+
+task.spawn(function()
+    highlight.Parent = lp.Character or lp.CharacterAdded:Wait()
+    lp.CharacterAdded:Connect(function(c) highlight.Adornee = c; highlight.Parent = c end)
+end)
+
+-- [ TRAJECTORY POOLER ] --
+local traj_folder = Instance.new("Folder", workspace)
+traj_folder.Name = "ArurTrajectory"
+
+for i = 1, 31 do
+    local dot = Instance.new("Part", traj_folder)
+    dot.Name = "Dot" .. i
+    dot.Anchored = true
+    dot.CanCollide = false
+    dot.CanTouch = false
+    dot.CastShadow = false
+    dot.Size = Vector3.new(0.2, 0.2, 0.2)
+    dot.Shape = Enum.PartType.Ball
+    dot.Transparency = 1
+    dot.Material = Enum.Material.Neon
+    table.insert(dotPool, dot)
+    
+    local p_set = {}
+    for p = 1, NUM_PARTICLE_TYPES do
+        local pe = Instance.new("ParticleEmitter", dot)
+        pe.Enabled = false
+        pe.Rate = 0
+        table.insert(p_set, pe)
+    end
+    table.insert(dotParticleSets, p_set)
+end
+
+for layer = 1, NUM_BEAM_LAYERS do
+    beamLayers[layer] = {}
+    attLayers[layer] = {}
+    for i = 1, 30 do
+        local a1 = Instance.new("Attachment", traj_folder)
+        local a2 = Instance.new("Attachment", traj_folder)
+        local b = Instance.new("Beam", traj_folder)
+        b.Attachment0 = a1
+        b.Attachment1 = a2
+        b.Enabled = false
+        b.FaceCamera = true
+        table.insert(beamLayers[layer], b)
+        table.insert(attLayers[layer], {a1, a2})
+    end
+end
 
 -- [ BEAM STYLE PRESETS ] --
 local NS  = NumberSequence.new
@@ -423,6 +471,12 @@ local ArurHubData = {
     TargetHUDDistanceColor = Color3.fromRGB(200, 200, 200),
     TargetHUDDisplayName = false,
 }
+
+-- [ SHARED UTILS ] --
+function ArurHubData.HasBall(target)
+    local char = (target and target.Character) or lp.Character
+    return char and (char:FindFirstChild("Basketball") or char:FindFirstChild("Ball")) ~= nil
+end
 
 -- [ NOTIFICATION SYSTEM ] --
 local notificationGui = Instance.new('ScreenGui')
@@ -825,9 +879,14 @@ local function notify(text)
 end
 
 -- [ LOGIC FUNCTIONS ] --
-local function hasBall()
-    local folder = workspace:FindFirstChild(lp.Name)
-    return folder and folder:FindFirstChild('Basketball')
+function ArurHubData.HasBall(targetPlayer)
+    local char = (targetPlayer or lp).Character
+    if not char then return false end
+    if char:FindFirstChild("Basketball") or char:FindFirstChild("basketball") then return true end
+    for _, obj in ipairs(char:GetChildren()) do
+        if string.match(string.lower(obj.Name), "basketball") then return true end
+    end
+    return char:FindFirstChild("Ball") ~= nil
 end
 
 local function powerForDistance(d)
@@ -919,9 +978,11 @@ function getNearestRim(customPos)
     if not origin then return nil, math.huge end
     local dist, rim = math.huge, nil
     for _, r in ipairs(rimCache) do
-        local rFlat = Vector3.new(r.Position.X, origin.Y, r.Position.Z)
-        local d = (rFlat - origin).Magnitude
-        if d < dist then dist = d; rim = r end
+        if r and r:IsA("BasePart") then
+            local rFlat = Vector3.new(r.Position.X, origin.Y, r.Position.Z)
+            local d = (rFlat - origin).Magnitude
+            if d < dist then dist = d; rim = r end
+        end
     end
     return rim, dist
 end
@@ -1028,21 +1089,13 @@ rangeLabel.Font = Enum.Font.SourceSansBold
 rangeLabel.TextScaled = true
 rangeLabel.Visible = false
 
-local highlight
-local function setupHighlight(char)
-    if not char then return end
-    highlight = Instance.new('Highlight', char)
-    highlight.Adornee = char
-    highlight.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
-    highlight.Enabled = ShowRange 
-    highlight.FillTransparency = 0.5
-    highlight.OutlineTransparency = 0
-    highlight.FillColor = Color3.fromRGB(255, 0, 0)
-    highlight.OutlineColor = Color3.fromRGB(255, 255, 255)
-end
-
-lp.CharacterAdded:Connect(setupHighlight)
-if lp.Character then setupHighlight(lp.Character) end
+-- Removed individual setupHighlight, replaced with unified visuals system
+lp.CharacterAdded:Connect(function(c)
+    if highlight then
+        highlight.Adornee = c
+        highlight.Parent = c
+    end
+end)
 
 -- [ SCORE EFFECTS HOOK ] --
 local EffectNames = {"Dragon Portal"}
@@ -1216,7 +1269,7 @@ local function performSelfPass()
     lp:SetAttribute('Power', calculatedPower)
     
     local rawDirection = camera.CFrame.LookVector
-    if selfPassDirection == "Character" then
+    if ArurHubData.SelfPassDirection == "Character" then
         local root = char:FindFirstChild('HumanoidRootPart')
         if root then rawDirection = root.CFrame.LookVector end
     end
@@ -1478,9 +1531,9 @@ local range_toggle = range_sec:toggle({
     enabled = false,
     default = false,
     callback = function(v) 
-        ShowRange = v 
-        rangeLabel.Visible = v 
-        highlight.Enabled = v 
+        ArurHubData.ShowRange = v 
+        if rangeLabel then rangeLabel.Visible = v end
+        if highlight then highlight.Enabled = v end
         SendNotification(v and "Range Indicator Enabled" or "Range Indicator Disabled", 3, v and Color3.fromRGB(0, 255, 0) or Color3.fromRGB(255, 0, 0))
     end
 })
@@ -1493,7 +1546,7 @@ range_settings:toggle({
     enabled = false,
     default = true,
     callback = function(v) 
-        OnlyShowWithAimbot = v 
+        ArurHubData.OnlyShowWithAimbot = v 
         SendNotification(v and "Aimbot-Only Range ON" or "Aimbot-Only Range OFF", 3, v and Color3.fromRGB(0, 255, 0) or Color3.fromRGB(255, 0, 0))
     end
 })
@@ -1502,19 +1555,19 @@ range_settings:dropdown({
     name = "Mode",
     items = {"Outline", "Bottom", "Top"},
     default = "Outline",
-    callback = function(v) RangeMode = v end
+    callback = function(v) ArurHubData.RangeMode = v end
 })
 
 range_settings:colorpicker({
     name = "In Range Color",
     color = Color3.new(0, 1, 0),
-    callback = function(v) InRangeColor = v end
+    callback = function(v) ArurHubData.InRangeColor = v end
 })
 
 range_settings:colorpicker({
     name = "Out of Range Color",
     color = Color3.new(1, 0, 0),
-    callback = function(v) OutRangeColor = v end
+    callback = function(v) ArurHubData.OutRangeColor = v end
 })
 
 local function setupRankIconHooks()
@@ -1578,7 +1631,7 @@ local traj_toggle = traj_sec:toggle({
     enabled = false,
     default = false,
     callback = function(v) 
-        TrajectoryEnabled = v 
+        ArurHubData.TrajectoryEnabled = v 
         SendNotification(v and "Trajectory Enabled" or "Trajectory Disabled", 3, v and Color3.fromRGB(0, 255, 0) or Color3.fromRGB(255, 0, 0))
     end
 })
@@ -1591,7 +1644,7 @@ traj_settings:toggle({
     enabled = false,
     default = true,
     callback = function(v) 
-        OnlyShowTrajWithAimbot = v 
+        ArurHubData.OnlyShowTrajWithAimbot = v 
         SendNotification(v and "Aimbot-Only Traj ON" or "Aimbot-Only Traj OFF", 3, v and Color3.fromRGB(0, 255, 0) or Color3.fromRGB(255, 0, 0))
     end
 })
@@ -1599,26 +1652,26 @@ traj_settings:toggle({
 traj_settings:colorpicker({
     name = "Line Color",
     color = Color3.fromRGB(0, 255, 0),
-    callback = function(v) TrajectoryColor = v end
+    callback = function(v) ArurHubData.TrajectoryColor = v end
 })
 
 traj_settings:dropdown({
     name = "Mode",
     items = {"Dots", "Line"},
     default = "Line",
-    callback = function(v) TrajectoryMode = v end
+    callback = function(v) ArurHubData.TrajectoryMode = v end
 })
 
 traj_settings:slider({
     name = "Transparency",
     min = 0, max = 1, default = 0, interval = 0.01,
-    callback = function(v) TrajectoryTransparency = v end
+    callback = function(v) ArurHubData.TrajectoryTransparency = v end
 })
 
 traj_settings:slider({
     name = "Stay Duration",
     min = 0, max = 5, default = 1.5, interval = 0.1,
-    callback = function(v) TrajectoryStayDuration = v end
+    callback = function(v) ArurHubData.TrajectoryStayDuration = v end
 })
 
 traj_settings:toggle({
@@ -1628,7 +1681,7 @@ traj_settings:toggle({
     enabled = false,
     default = true,
     callback = function(v) 
-        TrajectoryStopAtHoop = v 
+        ArurHubData.TrajectoryStopAtHoop = v 
     end
 })
 
@@ -2211,7 +2264,7 @@ task.spawn(function()
 end)
 
 local function onJump()
-    if not ArurHubData.AimbotEnabled or not hasBall() then return end
+    if not ArurHubData.AimbotEnabled or not ArurHubData.HasBall() then return end
     
     -- Ensure the one-time breach was successful
     if not _G.ArurHubMapping then 
@@ -2309,7 +2362,7 @@ run_service.RenderStepped:Connect(function()
     local inRangeOfHoop = dist <= 74
 
     -- Range Indicator Update
-    if ArurHubData.ShowRange and hasBall() then
+    if ArurHubData.ShowRange and ArurHubData.HasBall() then
         if ArurHubData.OnlyShowWithAimbot and not ArurHubData.AimbotEnabled then
             rangeLabel.Visible = false
             highlight.Enabled = false
@@ -2336,7 +2389,7 @@ run_service.RenderStepped:Connect(function()
     -- Trajectory Update
     local head = lp.Character and lp.Character:FindFirstChild("Head")
     local root = lp.Character and lp.Character:FindFirstChild("HumanoidRootPart")
-    local showTraj = ArurHubData.TrajectoryEnabled and hasBall() and head and rimPart and inRangeOfHoop
+    local showTraj = ArurHubData.TrajectoryEnabled and ArurHubData.HasBall() and head and rimPart and inRangeOfHoop
     if showTraj and ArurHubData.OnlyShowTrajWithAimbot and not ArurHubData.AimbotEnabled then
         showTraj = false
     end
@@ -2371,8 +2424,9 @@ run_service.RenderStepped:Connect(function()
         local control = ((p + targetEnd) / 2) + Vector3.new(0, arcV * 0.95, 0)
         
         finalPoints = {}
+        local maxT = ArurHubData.TrajectoryStopAtHoop and 1 or 1.25 -- Extend if toggle off
         for i = 0, 30 do
-            local t = i / 30
+            local t = (i / 30) * maxT
             table.insert(finalPoints, (1-t)^2*p + 2*(1-t)*t*control + t^2*targetEnd)
         end
     elseif ArurHubData.TrajectoryEnabled and (tick() - lastShotInfo.time) < ArurHubData.TrajectoryStayDuration then
@@ -2530,7 +2584,6 @@ run_service.Heartbeat:Connect(function(dt)
             local tPos     = tPosReal + (tRoot.Velocity * ArurHubData.PredictionOffset * scaler)
             local dist     = (Vector2.new(myPos.X, myPos.Z) - Vector2.new(tPos.X, tPos.Z)).Magnitude
 
-            -- HUD UPDATE
             if ArurHubData.TargetHUDEnabled then
                 updateTargetHUD(ArurHubData.LockedPlayer, realDist)
             else
@@ -2538,7 +2591,14 @@ run_service.Heartbeat:Connect(function(dt)
             end
 
             if math.abs(dist - FOLLOW_DIST) > DEAD_ZONE then
-                local dest = tPos + (tRoot.Velocity.Magnitude > 0.1 and tRoot.Velocity.Unit * FOLLOW_DIST or Vector3.zero)
+                local dest
+                if realDist > 12 then
+                    -- Direct pursuit when far away
+                    dest = tPosReal
+                else
+                    -- "Danclike" prediction/offset when close
+                    dest = tPos + (tRoot.Velocity.Magnitude > 0.1 and tRoot.Velocity.Unit * FOLLOW_DIST or Vector3.zero)
+                end
                 activeHum:MoveTo(dest)
             end
         end
@@ -2683,15 +2743,7 @@ workspace.DescendantAdded:Connect(function(obj)
     if obj.Name == "dunkFunction" then task.wait(1); ArurHubData.updateDunkCache() end
 end)
 
-function ArurHubData.HasBall(targetPlayer)
-    local char = (targetPlayer or lp).Character
-    if not char then return false end
-    if char:FindFirstChild("Basketball") or char:FindFirstChild("basketball") then return true end
-    for _, obj in ipairs(char:GetChildren()) do
-        if string.match(string.lower(obj.Name), "basketball") then return true end
-    end
-    return false
-end
+-- Data Functions Unified Above
 
 function ArurHubData.findTheBall()
     local char = lp.Character
@@ -2742,7 +2794,7 @@ task.spawn(function()
         if nearestRemote and nearestDist <= 21.0 then
             ArurHubData.IsDunkingSpam = true
             task.spawn(function()
-                while hasBall() and ArurHubData.AutoDunkEnabled do
+                while ArurHubData.HasBall() and ArurHubData.AutoDunkEnabled do
                     task.spawn(function()
                         nearestRemote:InvokeServer(ball)
                     end)
