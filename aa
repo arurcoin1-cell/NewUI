@@ -2138,45 +2138,59 @@ oob_sec:toggle({
 _G.ArurHubMapping = {"X2", "Y1", "X1", "Y2", "Z2", "Z1"}
 _G.ArurHubCode = "Oh yeah yeah"
 
-task.spawn(function()
-    print("[ARURHUB] Initiating Universal Actor-Breach Sequence...")
-    local actors = getactors()
-    if #actors == 0 then
-        warn("No Actors found. ArurHub will use built-in fallbacks.")
-        return
+-- [ FAST GC SCANNER ] --
+local function performFastGC()
+    print("[ARURHUB] Performing Fast-GC Scan...")
+    for _, v in pairs(getgc(true)) do
+        if typeof(v) == "function" and islclosure(v) then
+            local success, consts = pcall(debug.getconstants, v)
+            if success and consts and table.find(consts, "FireServer") and table.find(consts, "Power") then
+                local upvals = debug.getupvalues(v)
+                for _, up in pairs(upvals) do
+                    if typeof(up) == "table" and #up == 6 and typeof(up[1]) == "string" and up[1]:match("[XYZ][12]") then
+                        _G.ArurHubMapping = up
+                        for _, sc in pairs(upvals) do
+                            if typeof(sc) == "string" and #sc > 3 and not sc:find("Server") then
+                                _G.ArurHubCode = sc
+                            end
+                        end
+                        warn("!!! ARURHUB: Fast-GC Succeded: Mapping Stolen !!!")
+                        return true
+                    end
+                end
+            end
+        end
     end
+end
+
+-- [ SILENT BACKGROUND ACTOR SCAN ] --
+local function performBackgroundActorScan()
+    local actors = getactors()
+    if #actors == 0 then return end
     
     local id, channel = create_comm_channel()
     channel.Event:Connect(function(mapping, code)
-        if _G.ArurHubMapping and #_G.ArurHubMapping == 6 and mapping[1] == _G.ArurHubMapping[1] then return end
         _G.ArurHubMapping = mapping
         _G.ArurHubCode = code
-        warn("!!! ARURHUB BREACH: Mapping Stolen Successfully via Multi-Actor Scan !!!")
-        print("Mapping:", table.concat(_G.ArurHubMapping, ", "), "| Code:", _G.ArurHubCode)
+        print("[ARURHUB] Silent Actor-Breach Stole Mapping!")
     end)
 
     local scannerCode = [[
         local channelId = ...
         local channel = get_comm_channel(channelId)
-        
         for _, v in pairs(getgc(true)) do
             if typeof(v) == "function" and islclosure(v) then 
                 local success, consts = pcall(debug.getconstants, v)
                 if success and consts and table.find(consts, "FireServer") then
                     local upvals = debug.getupvalues(v)
                     for _, up in pairs(upvals) do
-                        if typeof(up) == "table" and #up == 6 then
-                            -- Confirm it's the right mapping (X1-Z2 pattern)
-                            if typeof(up[1]) == "string" and up[1]:match("[XYZ][12]") then
-                                local secretCode = "Oh yeah yeah"
-                                for _, sc in pairs(upvals) do
-                                    if typeof(sc) == "string" and #sc > 3 and not sc:find("Server") then
-                                        secretCode = sc
-                                    end
-                                end
-                                channel:Fire(up, secretCode)
-                                return
+                        if typeof(up) == "table" and #up == 6 and typeof(up[1]) == "string" and up[1]:match("[XYZ][12]") then
+                            local secretCode = "Oh yeah yeah"
+                            for _, sc in pairs(upvals) do
+                                if typeof(sc) == "string" and #sc > 3 and not sc:find("Server") then secretCode = sc end
                             end
+                            channel:Fire(up, secretCode)
+                            return
                         end
                     end
                 end
@@ -2184,10 +2198,15 @@ task.spawn(function()
         end
     ]]
 
-    for _, actor in pairs(actors) do
-        if typeof(actor) == "Instance" then
-            pcall(run_on_actor, actor, scannerCode, id)
-        end
+    for i = 1, math.min(#actors, 100) do -- Limit to first 100 to prevent hang
+        pcall(run_on_actor, actors[i], scannerCode, id)
+    end
+end
+
+-- Execute Scan Systems
+task.spawn(function()
+    if not performFastGC() then
+        performBackgroundActorScan()
     end
 end)
 
