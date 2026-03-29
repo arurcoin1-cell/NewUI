@@ -1,7 +1,7 @@
 if not game:IsLoaded() then game.Loaded:Wait() end
 repeat task.wait() until game:GetService("Players").LocalPlayer and game:GetService("Players").LocalPlayer.Character and game:GetService("Players").LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
 
-local library = loadstring(game:HttpGet("https://raw.githubusercontent.com/arurcoin1-cell/NewUI/main/Source?t=" .. tick()))()
+local library = loadstring(game:HttpGet("https://raw.githubusercontent.com/arurcoin1-cell/NewUI/refs/heads/main/Source?t=" .. tick()))()
 -- [ FIX FOR INTERNAL LIBRARY ERRORS ] --
 -- If the library's internal code refers to a global 'library' variable, ensure it exists.
 if getgenv().library and not _G.library then _G.library = getgenv().library end
@@ -2142,96 +2142,108 @@ task.spawn(function()
     local execName = identifyexecutor and identifyexecutor() or "Unknown"
     local isMobileExec = execName:find("Delta") or execName:find("Seliware") or execName:find("Volcano")
     
-    print("[ARURHUB] Initiating Breach Sequence (" .. execName .. ")...")
-    local targetActor = nil
+    print("[ARURHUB] Initiating Super-Aggressive Breach (" .. execName .. ")...")
+    
+    local mappingFound = false
+    local retryCount = 0
+    local maxRetries = 150 -- 15 seconds total (100ms intervals)
 
-    -- 1. Try to find an Actor for Parallel VMs (PC/Volt) - Skip if on Mobile
-    if not isMobileExec then
-        for _, actor in pairs(getactors()) do
-            if typeof(actor) == "Instance" then
-                local name = actor:GetFullName()
-                if name:find("PlayerGui") then
-                    targetActor = actor
-                    print("[ARURHUB] Actor VM Found:", name)
-                    break
-                end
-            end
-        end
-    end
+    -- Define the Recursive Deep-Scanner
+    local scanned = {}
+    local function deepScan(v, depth)
+        if mappingFound or not v or depth > 5 or (typeof(v) == "table" and scanned[v]) then return end
+        if typeof(v) == "table" then scanned[v] = true end
 
-    -- 2. Define the Scanning Logic
-    local function performScan(isParallel, channel)
-        for _, v in pairs(getgc(true)) do
-            if typeof(v) == "function" and islclosure(v) then 
-                local ok, consts = pcall(debug.getconstants, v)
-                if ok and consts and table.find(consts, "FireServer") then
-                    local upvals = debug.getupvalues(v)
-                    for _, up in pairs(upvals) do
-                        if typeof(up) == "table" and #up == 6 then
-                            local code = "Ahoy"
-                            for _, val in pairs(upvals) do
-                                if typeof(val) == "string" and #val > 3 then code = val end
+        if typeof(v) == "function" and islclosure(v) then
+            local ok, consts = pcall(debug.getconstants, v)
+            if ok and consts and table.find(consts, "FireServer") then
+                local upvals = debug.getupvalues(v)
+                for _, up in pairs(upvals) do
+                    if typeof(up) == "table" and #up == 6 then
+                        local hasMapping = true
+                        for _, val in pairs(up) do if typeof(val) ~= "number" then hasMapping = false break end end
+                        if hasMapping then
+                            _G.ArurHubMapping = up
+                            for _, codeVal in pairs(upvals) do
+                                if typeof(codeVal) == "string" and #codeVal > 3 then _G.ArurHubCode = codeVal end
                             end
-                            if isParallel and channel then
-                                channel:Fire(up, code)
-                            else
-                                _G.ArurHubMapping = up
-                                _G.ArurHubCode = code
-                            end
-                            return true
+                            mappingFound = true
+                            return
                         end
                     end
                 end
             end
+        elseif typeof(v) == "table" then
+            for _, child in pairs(v) do
+                deepScan(child, depth + 1)
+            end
         end
-        return false
     end
 
-    -- 3. Execute Breach
-    if targetActor then
-        -- PARALLEL MODE (PC)
-        local id, channel = create_comm_channel()
-        channel.Event:Connect(function(mapping, code)
-            _G.ArurHubMapping = mapping
-            _G.ArurHubCode = code
-        end)
+    -- Persistent Hunting Loop
+    while not mappingFound and retryCount < maxRetries do
+        retryCount = retryCount + 1
+        scanned = {} -- Clear cache for fresh scan
 
-        run_on_actor(targetActor, [[
-            local channelId = ...
-            local channel = get_comm_channel(channelId)
-            
-            for _, v in pairs(getgc(true)) do
-                if typeof(v) == "function" and islclosure(v) then 
-                    local ok, consts = pcall(debug.getconstants, v)
-                    if ok and consts and table.find(consts, "FireServer") then
-                        local upvals = debug.getupvalues(v)
-                        for _, up in pairs(upvals) do
-                            if typeof(up) == "table" and #up == 6 then
-                                local code = "Ahoy"
-                                for _, val in pairs(upvals) do
-                                    if typeof(val) == "string" and #val > 3 then code = val end
+        -- 1. Try Actor-based Parallel Scanning first
+        local targets = getactors()
+        if #targets == 0 then
+            -- Fallback: Manual Actor Crawl (for broken executors)
+            for _, desc in pairs(game:GetDescendants()) do
+                if desc:IsA("Actor") and desc:GetFullName():find("PlayerGui") then
+                    table.insert(targets, desc)
+                end
+            end
+        end
+
+        for _, actor in pairs(targets) do
+            if mappingFound then break end
+            pcall(function()
+                run_on_actor(actor, [[
+                    for _, v in pairs(getgc(true)) do
+                        if typeof(v) == "function" and islclosure(v) then
+                            local ok, consts = pcall(debug.getconstants, v)
+                            if ok and consts and table.find(consts, "FireServer") then
+                                local upvals = debug.getupvalues(v)
+                                for _, up in pairs(upvals) do
+                                    if typeof(up) == "table" and #up == 6 then
+                                        local code = "Ahoy"
+                                        for _, val in pairs(upvals) do
+                                            if typeof(val) == "string" and #val > 3 then code = val end
+                                        end
+                                        _G.ArurHubMapping = up
+                                        _G.ArurHubCode = code
+                                        return
+                                    end
                                 end
-                                channel:Fire(up, code)
-                                return
                             end
                         end
                     end
-                end
+                ]])
+            end)
+        end
+
+        -- 2. Deep-Scan Main Thread Memory (GC + Registry + Script Envs)
+        if not mappingFound then
+            for _, v in pairs(getgc(true)) do deepScan(v, 0) if mappingFound then break end end
+        end
+        if not mappingFound then
+            for _, v in pairs(getreg()) do deepScan(v, 0) if mappingFound then break end end
+        end
+        if not mappingFound and getscripts then
+            for _, scr in pairs(getscripts()) do 
+                local ok, env = pcall(getfenv, scr)
+                if ok then deepScan(env, 0) end
+                if mappingFound then break end
             end
-        ]], id)
-        
-        -- Verification Loop for Parallel
-        local start = tick()
-        while not _G.ArurHubMapping and tick() - start < 3.0 do task.wait(0.1) end
-    else
-        -- MAIN THREAD MODE (Mobile/Delta)
-        print("[ARURHUB] Mobile Environment Detected - Running Instant Main-Thread Scan...")
-        performScan(false)
+        end
+
+        if not mappingFound then task.wait(0.1) end
     end
     
-    -- 4. Final Verification
+    -- Final Results Warning
     if _G.ArurHubMapping then
-        warn("!!! ARURHUB BREACH: Mapping Stolen Successfully !!!")
+        warn("!!! ARURHUB BREACH SUCCESS: Mapping Found Successfully !!!")
         print("Mapping:", table.concat(_G.ArurHubMapping, ", "), "| Code:", _G.ArurHubCode)
     else
         warn("!!! ARURHUB BREACH FAILED: Could not decode jump parameters on this platform !!!")
