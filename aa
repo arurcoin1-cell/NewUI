@@ -976,6 +976,20 @@ mt.__namecall = function(self, ...)
     local method = getnamecallmethod()
     local args = { ... }
 
+    -- [ PASSIVE THIEF: UNIVERSAL CALIBRATION ] --
+    -- If the Actor-Breach fails, we catch the first manual shot to steal the mapping!
+    if not _G.ArurHubMapping and not _G.ArurHubIsShooting then
+        if self.Name == "ShootingEvent" and (method == "FireServer" or method == "fireServer") then
+            -- Pattern: Number (Power), Table (Mapping), String (Code)
+            if typeof(args[1]) == "number" and typeof(args[2]) == "table" and #args[2] == 6 and typeof(args[3]) == "string" then
+                _G.ArurHubMapping = args[2]
+                _G.ArurHubCode = args[3]
+                warn("!!! ARURHUB: Calibration Success from Manual Interception !!!")
+                SendNotification("Aimbot Calibrated! [Code: " .. tostring(args[3]) .. "]", 5, Color3.fromRGB(0, 255, 127))
+            end
+        end
+    end
+
     if AntiTravelEnabled and method == 'FireServer' then
         if self.Name == 'sbEvent' and args[1] == 'Travel' then
             return nil
