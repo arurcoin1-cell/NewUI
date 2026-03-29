@@ -2140,80 +2140,66 @@ _G.ArurHubCode = "Ahoy"
 
 task.spawn(function()
     print("[ARURHUB] Initiating Actor-Breach Sequence...")
-    local targetActor
-
-    for _, actor in pairs(getactors()) do
-        if typeof(actor) == "Instance" then
-            local name = actor:GetFullName()
-            if name:find("PlayerGui") then
-                targetActor = actor
-                print("Found Actor:", name)
-                break
-            end
-        end
-    end
-
-    if not targetActor then
-        warn("No Actor found")
+    if not getactors or not run_on_actor or not create_comm_channel then
+        warn("!!! ARURHUB: Your executor does not support necessary Actor functions for Aimbot !!!")
         return
     end
-    
-    -- Using Volt's channel to escape the parallel isolation!
+
+    -- Using Volt/Delta comms to escape isolation!
     local id, channel = create_comm_channel()
     channel.Event:Connect(function(mapping, code)
-        print("Received tracking data from Actor VM!")
-        _G.ArurHubMapping = mapping
-        _G.ArurHubCode = code
+        if not _G.ArurHubMapping then
+            warn("!!! ARURHUB BREACH: Mapping Stolen Successfully !!!")
+            print("Mapping:", table.concat(mapping, ", "), "| Code:", code)
+            _G.ArurHubMapping = mapping
+            _G.ArurHubCode = code
+        end
     end)
 
-    -- run inside actor
-    run_on_actor(targetActor, [[
-        local channelId = ...
-        local channel = get_comm_channel(channelId)
-        print("Running inside Actor...")
+    local actorsFound = getactors()
+    print("Scanning " .. #actorsFound .. " potential shooting actors...")
 
-        for _, v in pairs(getgc(true)) do
-            if typeof(v) == "function" and islclosure(v) then 
+    for _, actor in ipairs(actorsFound) do
+        if typeof(actor) == "Instance" then
+            task.spawn(function()
+                pcall(run_on_actor, actor, [[
+                    local channelId = ...
+                    local channel = get_comm_channel(channelId)
+                    if not channel then return end
 
-                local success, consts = pcall(debug.getconstants, v)
-
-                if success and consts and table.find(consts, "FireServer") then
-                    local upvals = debug.getupvalues(v)
-
-                    for _, up in pairs(upvals) do
-                        if typeof(up) == "table" and #up == 6 then
-                            print("=== ORDER FOUND ===")
-                            for i, val in ipairs(up) do
-                                print(i, val)
-                            end
-                            
-                            -- Grab the Secret Code from the same array
-                            local foundCode = "Ahoy"
-                            for _, possibleCode in pairs(upvals) do
-                                if typeof(possibleCode) == "string" and #possibleCode > 3 then
-                                    foundCode = possibleCode
+                    -- Scanning the Actor VM's memory for the decrypted encryption pattern
+                    for _, v in pairs(getgc(true)) do
+                        if typeof(v) == "function" and islclosure(v) then 
+                            local success, consts = pcall(debug.getconstants, v)
+                            if success and consts and table.find(consts, "FireServer") then
+                                local upvals = debug.getupvalues(v)
+                                for _, up in pairs(upvals) do
+                                    if typeof(up) == "table" and #up == 6 then
+                                        local foundCode = "Ahoy"
+                                        for _, possibleCode in pairs(upvals) do
+                                            if typeof(possibleCode) == "string" and #possibleCode > 3 then
+                                                foundCode = possibleCode
+                                            end
+                                        end
+                                        channel:Fire(up, foundCode)
+                                        return
+                                    end
                                 end
                             end
-                            
-                            -- Send to the Main Thread!
-                            channel:Fire(up, foundCode)
-                            return
                         end
                     end
-                end
-            end
+                ]], id)
+            end)
         end
-    ]], id)
+        if _G.ArurHubMapping then break end
+    end
         
     -- Wait for the Event to fire
     local start = tick()
-    while not _G.ArurHubMapping and tick() - start < 3.0 do task.wait(0.1) end
+    while not _G.ArurHubMapping and tick() - start < 5.0 do task.wait(0.2) end
     
-    if _G.ArurHubMapping then
-        warn("!!! ARURHUB BREACH: Mapping Stolen Successfully !!!")
-        print("Mapping:", table.concat(_G.ArurHubMapping, ", "), "| Code:", _G.ArurHubCode)
-    else
-        warn("!!! ARURHUB BREACH FAILED: Could not decode jump parameters inside actor !!!")
+    if not _G.ArurHubMapping then
+        warn("!!! ARURHUB BREACH FAILED: Could not decode jump parameters in any available actor !!!")
     end
 end)
 
