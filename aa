@@ -1,7 +1,7 @@
 if not game:IsLoaded() then game.Loaded:Wait() end
 repeat task.wait() until game:GetService("Players").LocalPlayer and game:GetService("Players").LocalPlayer.Character and game:GetService("Players").LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
 
-local library = loadstring(game:HttpGet("https://raw.githubusercontent.com/arurcoin1-cell/NewUI/main/Source?t=" .. tick()))()
+local library = loadstring(game:HttpGet("https://raw.githubusercontent.com/arurcoin1-cell/NewUI/refs/heads/main/Source?t=" .. tick()))()
 -- [ FIX FOR INTERNAL LIBRARY ERRORS ] --
 -- If the library's internal code refers to a global 'library' variable, ensure it exists.
 if getgenv().library and not _G.library then _G.library = getgenv().library end
@@ -1146,7 +1146,18 @@ aim_sec:dropdown({
 aim_sec:slider({
     name = "Jump Wait Time",
     min = 0.05, max = 0.4, default = 0.25, interval = 0.001,
-    callback = function(v) ArurHubData.JumpWaitTime = v end,
+    callback = function(v) ArurHubData.JumpWaitTime = v end
+})
+
+aim_sec:button({
+    name = "Force Recover Aimbot",
+    callback = function()
+        SendNotification("Attempting manual breach...", 3, Color3.fromRGB(220, 20, 60))
+        task.spawn(function()
+            -- Trigger the global breach logic again
+            fireActorBreach()
+        end)
+    end
 })
 
 aim_sec:toggle({
@@ -2138,12 +2149,15 @@ oob_sec:toggle({
 _G.ArurHubMapping = nil
 _G.ArurHubCode = "Ahoy"
 
-task.spawn(function()
+local function fireActorBreach()
     print("[ARURHUB] Initiating Actor-Breach Sequence...")
     if not getactors or not run_on_actor or not create_comm_channel then
         warn("!!! ARURHUB: Your executor does not support necessary Actor functions for Aimbot !!!")
         return
     end
+
+    -- 3-Second Wait for Decryption Sync
+    task.wait(3.0)
 
     -- Using Volt/Delta comms to escape isolation!
     local id, channel = create_comm_channel()
@@ -2157,7 +2171,17 @@ task.spawn(function()
     end)
 
     local actorsFound = getactors()
-    print("Scanning " .. #actorsFound .. " potential shooting actors...")
+    
+    -- COBALT TRICK: Some executors/games "hide" actors in nil to avoid detection!
+    if getnilinstances then
+        for _, v in pairs(getnilinstances()) do
+            if v:IsA("Actor") then
+                table.insert(actorsFound, v)
+            end
+        end
+    end
+
+    print("Hyper-Scanning " .. #actorsFound .. " potential shooting actors...")
 
     for _, actor in ipairs(actorsFound) do
         if typeof(actor) == "Instance" then
@@ -2165,29 +2189,37 @@ task.spawn(function()
                 pcall(run_on_actor, actor, [[
                     local channelId = ...
                     local channel = get_comm_channel(channelId)
-                    if not channel then return end
-
-                    -- Scanning the Actor VM's memory for the decrypted encryption pattern
-                    for _, v in pairs(getgc(true)) do
-                        if typeof(v) == "function" and islclosure(v) then 
-                            local success, consts = pcall(debug.getconstants, v)
-                            if success and consts and table.find(consts, "FireServer") then
-                                local upvals = debug.getupvalues(v)
-                                for _, up in pairs(upvals) do
+                    
+                    local function check(f)
+                        if typeof(f) == "function" and islclosure(f) then
+                            local s, c = pcall(debug.getconstants, f)
+                            if s and c and table.find(c, "FireServer") then
+                                local u = debug.getupvalues(f)
+                                for _, up in pairs(u) do
                                     if typeof(up) == "table" and #up == 6 then
-                                        local foundCode = "Ahoy"
-                                        for _, possibleCode in pairs(upvals) do
-                                            if typeof(possibleCode) == "string" and #possibleCode > 3 then
-                                                foundCode = possibleCode
-                                            end
+                                        local code = "Ahoy"
+                                        for _, pc in pairs(u) do
+                                            if typeof(pc) == "string" and #pc > 3 then code = pc end
                                         end
-                                        channel:Fire(up, foundCode)
-                                        return
+                                        if channel then channel:Fire(up, code) end
+                                        
+                                        -- Direct Global Fallback for buggy Comm Channels
+                                        _G.ArurHubMapping = up
+                                        _G.ArurHubCode = code
+                                        return true
                                     end
                                 end
                             end
                         end
+                        return false
                     end
+
+                    -- Path 1: Global Garbage Collection
+                    for _, v in pairs(getgc(true)) do if check(v) then return end end
+                    
+                    -- Path 2: Internal Registry (Fallback for restricted GC)
+                    local reg = (debug.getregistry or getregistry or function() return {} end)()
+                    for _, v in pairs(reg) do if check(v) then return end end
                 ]], id)
             end)
         end
@@ -2196,12 +2228,14 @@ task.spawn(function()
         
     -- Wait for the Event to fire
     local start = tick()
-    while not _G.ArurHubMapping and tick() - start < 5.0 do task.wait(0.2) end
+    while not _G.ArurHubMapping and tick() - start < 7.0 do task.wait(0.2) end
     
     if not _G.ArurHubMapping then
-        warn("!!! ARURHUB BREACH FAILED: Could not decode jump parameters in any available actor !!!")
+        warn("!!! ARURHUB BREACH FAILED: Could not decode jump parameters via GC, Registry, or Channel !!!")
     end
-end)
+end
+
+task.spawn(fireActorBreach)
 
 local function onJump()
     if not ArurHubData.AimbotEnabled or not hasBall() then return end
