@@ -293,15 +293,13 @@
         end
 
         function library:draggify(frame)
-            local dragging = false 
-            local start_size = frame.Position
-            local start 
+            local dragging, start, start_pos = false, nil, nil
 
             frame.InputBegan:Connect(function(input)
                 if input.UserInputType == Enum.UserInputType.MouseButton1 then
                     dragging = true
                     start = input.Position
-                    start_size = frame.Position
+                    start_pos = frame.Position
                 end
             end)
 
@@ -311,24 +309,19 @@
                 end
             end)
 
-            library:connection(uis.InputChanged, function(input, game_event) 
+            library:connection(uis.InputChanged, function(input) 
                 if dragging and input.UserInputType == Enum.UserInputType.MouseMovement then
-                    local viewport_x = camera.ViewportSize.X
-                    local viewport_y = camera.ViewportSize.Y
+                    local viewport = camera.ViewportSize
+                    local anchor = frame.AnchorPoint
+                    local size = frame.AbsoluteSize
+                    
+                    local tx = start_pos.X.Offset + (input.Position.X - start.X)
+                    local ty = start_pos.Y.Offset + (input.Position.Y - start.Y)
 
-                    local current_position = dim2(
-                        0,
-                        clamp(
-                            start_size.X.Offset + (input.Position.X - start.X),
-                            0,
-                            viewport_x - frame.Size.X.Offset
-                        ),
-                        0,
-                        math.clamp(
-                            start_size.Y.Offset + (input.Position.Y - start.Y),
-                            0,
-                            viewport_y - frame.Size.Y.Offset
-                        )
+                    local current_position = dim2(0, 
+                        math.clamp(tx, anchor.X * size.X, viewport.X - ((1 - anchor.X) * size.X)),
+                        0, 
+                        math.clamp(ty, anchor.Y * size.Y, viewport.Y - ((1 - anchor.Y) * size.Y))
                     )
 
                     library:tween(frame, {Position = current_position}, Enum.EasingStyle.Linear, 0.05)
@@ -529,14 +522,16 @@
                     Parent = library[ "items" ];
                     Size = cfg.size;
                     Name = "\0";
-                    AnchorPoint = vec2(0.5, 0.5);
-                    Position = dim2(0.5, 0, 0.5, 0);
+                    Position = dim2(0.5, -cfg.size.X.Offset / 2, 0.5, -cfg.size.Y.Offset / 2);
                     BorderColor3 = rgb(0, 0, 0);
                     BorderSizePixel = 0;
                     BackgroundColor3 = rgb(14, 14, 16)
-                }); -- removed absolute position freeze
+                }); items[ "main" ].Position = dim2(0, items[ "main" ].AbsolutePosition.X, 0, items[ "main" ].AbsolutePosition.Y)
                 
                 if uis.TouchEnabled then
+                    items["main"].AnchorPoint = vec2(0.5, 0.5)
+                    items["main"].Position = dim2(0.5, 0, 0.5, 0)
+                    
                     local toggle_btn = library:create("TextButton", {
                         Parent = library["items"],
                         Size = dim2(0, 48, 0, 48),
