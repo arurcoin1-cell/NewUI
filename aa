@@ -1,5 +1,5 @@
 if not game:IsLoaded() then game.Loaded:Wait() end
-repeat task.wait() until game:GetService("Players").LocalPlayer and game:GetService("Players").LocalPlayer.Character and game:GetService("Players").LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+repeat task.wait() until game:GetService("Players").LocalPlayer and game:GetService("Players").LocalPlaaayer.Character and game:GetService("Players").LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
 
 local library = loadstring(game:HttpGet("https://raw.githubusercontent.com/arurcoin1-cell/NewUI/refs/heads/main/Source?t=" .. tick()))()
 -- [ FIX FOR INTERNAL LIBRARY ERRORS ] --
