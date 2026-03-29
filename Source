@@ -525,6 +525,7 @@
             }); 
 
             local items = cfg.items; do
+                items[ "main" ] = library:create( "Frame" , {
                     Parent = library[ "items" ];
                     Size = cfg.size;
                     Name = "\0";
