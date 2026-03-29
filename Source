@@ -296,7 +296,7 @@
             local dragging, start, start_pos = false, nil, nil
 
             frame.InputBegan:Connect(function(input)
-                if input.UserInputType == Enum.UserInputType.MouseButton1 then
+                if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
                     dragging = true
                     start = input.Position
                     start_pos = frame.Position
@@ -304,13 +304,13 @@
             end)
 
             frame.InputEnded:Connect(function(input)
-                if input.UserInputType == Enum.UserInputType.MouseButton1 then
+                if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
                     dragging = false
                 end
             end)
 
             library:connection(uis.InputChanged, function(input) 
-                if dragging and input.UserInputType == Enum.UserInputType.MouseMovement then
+                if dragging and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
                     local viewport = camera.ViewportSize
                     local anchor = frame.AnchorPoint
                     local size = frame.AbsoluteSize
@@ -551,6 +551,7 @@
                         items["main"].Visible = not items["main"].Visible
                     end)
                     
+                    library:draggify(toggle_btn) -- [ ENABLES DRAGGING FOR TOGGLE BUTTON ] --                    
                     library:create("UIScale", {
                         Parent = items["main"],
                         Scale = math.clamp(camera.ViewportSize.Y / 750, 0.45, 0.95)
@@ -2853,29 +2854,35 @@
             end)
 
             uis.InputChanged:Connect(function(input)
-                if (dragging_sat or dragging_hue or dragging_alpha) and input.UserInputType == Enum.UserInputType.MouseMovement then
+                if (dragging_sat or dragging_hue or dragging_alpha) and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
                     cfg.update_color() 
                 end
             end)
 
             library:connection(uis.InputEnded, function(input)
-                if input.UserInputType == Enum.UserInputType.MouseButton1 then
+                if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
                     dragging_sat = false
                     dragging_hue = false
                     dragging_alpha = false
                 end
             end)    
 
-            items[ "alpha_gradient" ].MouseButton1Down:Connect(function()
-                dragging_alpha = true 
+            items[ "alpha_gradient" ].InputBegan:Connect(function(input)
+                if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+                    dragging_alpha = true 
+                end
             end)
             
-            items[ "hue_gradient" ].MouseButton1Down:Connect(function()
-                dragging_hue = true 
+            items[ "hue_gradient" ].InputBegan:Connect(function(input)
+                if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+                    dragging_hue = true 
+                end
             end)
             
-            items[ "sat" ].MouseButton1Down:Connect(function()
-                dragging_sat = true  
+            items[ "sat" ].InputBegan:Connect(function(input)
+                if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+                    dragging_sat = true  
+                end
             end)
 
             items[ "input" ].FocusLost:Connect(function()
