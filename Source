@@ -501,7 +501,7 @@
                 suffix = properties.suffix or properties.Suffix or "tech";
                 name = properties.name or properties.Name or "nebula";
                 game_name = properties.gameInfo or properties.game_info or properties.GameInfo or "Milenium for Counter-Strike: Global Offensive";
-                size = properties.size or properties.Size or (uis.TouchEnabled and dim2(0.65, 0, 0.75, 0) or dim2(0, 700, 0, 565));
+                size = properties.size or properties.Size or dim2(0, 700, 0, 565);
                 selected_tab;
                 items = {};
 
@@ -534,6 +534,13 @@
                     BorderSizePixel = 0;
                     BackgroundColor3 = rgb(14, 14, 16)
                 }); items[ "main" ].Position = dim2(0, items[ "main" ].AbsolutePosition.X, 0, items[ "main" ].AbsolutePosition.Y)
+                
+                if uis.TouchEnabled then
+                    library:create("UIScale", {
+                        Parent = items["main"],
+                        Scale = math.clamp(camera.ViewportSize.Y / 650, 0.45, 1)
+                    })
+                end
                 
                 library:create( "UICorner" , {
                     Parent = items[ "main" ];
