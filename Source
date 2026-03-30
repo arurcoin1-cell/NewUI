@@ -513,6 +513,14 @@
                 IgnoreGuiInset = true;
             }); 
 
+            library[ "mobile_gui" ] = library:create( "ScreenGui" , {
+                Parent = coregui;
+                Name = "\0";
+                Enabled = true;
+                ZIndexBehavior = Enum.ZIndexBehavior.Global;
+                IgnoreGuiInset = true;
+            }); 
+
             local items = cfg.items; do
                 items[ "main" ] = library:create( "Frame" , {
                     Parent = library[ "items" ];
@@ -531,7 +539,7 @@
                     items["main"].Position = dim2(0.5, 0, 0.5, 0)
                     
                     local toggle_btn = library:create("TextButton", {
-                        Parent = library["items"],
+                        Parent = library["mobile_gui"],
                         Size = dim2(0, 48, 0, 48),
                         Position = dim2(0.5, -24, 0.05, 0),
                         BackgroundColor3 = rgb(30, 30, 35),
