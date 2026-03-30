@@ -1,7 +1,7 @@
 if not game:IsLoaded() then game.Loaded:Wait() end
 repeat task.wait() until game:GetService("Players").LocalPlayer and game:GetService("Players").LocalPlayer.Character and game:GetService("Players").LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
 
-local library = loadstring(game:HttpGet("https://raw.githubusercontent.com/arurcoin1-cell/NewUI/refs/heads/main/Source"))()
+local library = loadstring(game:HttpGet("https://raw.githubusercontent.com/arurcoin1-cell/NewUI/main/Source"))()
 -- [ FIX FOR INTERNAL LIBRARY ERRORS ] --
 -- If the library's internal code refers to a global 'library' variable, ensure it exists.
 if getgenv().library and not _G.library then _G.library = getgenv().library end
@@ -428,6 +428,7 @@ local ArurHubData = {
     JumpWaitTime = 0.25,
     RandomizeWait = false,
     TeamGoalCheckEnabled = false,
+    TargetHUDScale = 1.0,
     
     MagnetEnabled = false,
     MaxMagnetDistance = 0,
@@ -514,6 +515,13 @@ targetMain.BackgroundTransparency = 0.1
 targetMain.BorderSizePixel = 0
 targetMain.GroupTransparency = 1 -- Start completely invisible
 targetMain.Parent = targetHUDGui
+
+local targetHUDScaleFactor = Instance.new("UIScale", targetMain)
+targetHUDScaleFactor.Scale = 1.0
+
+local function updateTargetHUDScale()
+    if targetHUDScaleFactor then targetHUDScaleFactor.Scale = ArurHubData.TargetHUDScale or 1.0 end
+end
 
 Instance.new('UICorner', targetMain).CornerRadius = UDim.new(0, 6)
 
@@ -1142,6 +1150,27 @@ pcall(function()
 end)
 
 -- [ UI INITIALIZATION ] --
+local function saveMobilePos(key, pos)
+    pcall(function()
+        local hs = game:GetService("HttpService")
+        local s, d = pcall(readfile, "arurhub_mobile_pos.json")
+        local t = (s and typeof(hs:JSONDecode(d)) == "table") and hs:JSONDecode(d) or {}
+        t[key] = {X = pos.X.Scale, Y = pos.Y.Scale, OffX = pos.X.Offset, OffY = pos.Y.Offset}
+        writefile("arurhub_mobile_pos.json", hs:JSONEncode(t))
+    end)
+end
+
+local function loadMobilePos(key)
+    local s, d = pcall(readfile, "arurhub_mobile_pos.json")
+    if s then
+        local t = game:GetService("HttpService"):JSONDecode(d)
+        if typeof(t) == "table" and t[key] then
+            return UDim2.new(t[key].X, t[key].OffX, t[key].Y, t[key].OffY)
+        end
+    end
+    return nil
+end
+
 local function createMobileToggle(name, uiName, dataKey, toggleObj, positionOffset)
     local stateKey = "mobile_" .. uiName:lower() .. "_gui"
     local mobileGui, mobileBtn, heartbeat
@@ -1153,6 +1182,9 @@ local function createMobileToggle(name, uiName, dataKey, toggleObj, positionOffs
                 return
             end
 
+            local existing = playerGui:FindFirstChild(stateKey)
+            if existing then existing:Destroy() end
+
             mobileGui = Instance.new('ScreenGui')
             mobileGui.Name = stateKey
             mobileGui.ResetOnSpawn = false
@@ -1161,7 +1193,7 @@ local function createMobileToggle(name, uiName, dataKey, toggleObj, positionOffs
             mobileBtn = Instance.new('TextButton')
             mobileBtn.Name = 'ToggleButton'
             mobileBtn.Size = UDim2.new(0, 100, 0, 40)
-            mobileBtn.Position = UDim2.new(0.9, -50, 0.2, positionOffset)
+            mobileBtn.Position = loadMobilePos(stateKey) or UDim2.new(0.9, -50, 0.2, positionOffset)
             mobileBtn.AnchorPoint = Vector2.new(0.5, 0.5)
             mobileBtn.BackgroundColor3 = Color3.fromRGB(255, 0, 0)
             mobileBtn.BorderSizePixel = 0
@@ -1182,6 +1214,12 @@ local function createMobileToggle(name, uiName, dataKey, toggleObj, positionOffs
             mobileBtn.MouseButton1Click:Connect(function()
                 if toggleObj then
                     toggleObj.set(not ArurHubData[dataKey])
+                end
+            end)
+            
+            mobileBtn.InputEnded:Connect(function(input)
+                if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+                    saveMobilePos(stateKey, mobileBtn.Position)
                 end
             end)
 
@@ -1386,6 +1424,9 @@ pass_sec:toggle({
         end
         SendNotification(state and "Mobile UI Enabled" or "Mobile UI Disabled", 3, state and Color3.fromRGB(0, 255, 0) or Color3.fromRGB(255, 0, 0))
         if state then
+            local existing = playerGui:FindFirstChild("MobileSelfPassGui")
+            if existing then existing:Destroy() end
+
             local mobileGui2 = Instance.new("ScreenGui")
             mobileGui2.Name = "MobileSelfPassGui"
             mobileGui2.ResetOnSpawn = false
@@ -1394,7 +1435,7 @@ pass_sec:toggle({
             local selfPassBtn = Instance.new("TextButton")
             selfPassBtn.Name = "SelfPassButton"
             selfPassBtn.Size = UDim2.new(0, 100, 0, 40)
-            selfPassBtn.Position = UDim2.new(0.9, -50, 0.2, -20)
+            selfPassBtn.Position = loadMobilePos("MobileSelfPassGui") or UDim2.new(0.9, -50, 0.2, -20)
             selfPassBtn.AnchorPoint = Vector2.new(0.5, 0.5)
             selfPassBtn.BackgroundColor3 = Color3.fromRGB(30, 144, 255)
             selfPassBtn.BorderSizePixel = 0
@@ -1413,6 +1454,12 @@ pass_sec:toggle({
             selfPassBtn.Draggable = true
 
             selfPassBtn.MouseButton1Click:Connect(performSelfPass)
+            
+            selfPassBtn.InputEnded:Connect(function(input)
+                if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+                    saveMobilePos("MobileSelfPassGui", selfPassBtn.Position)
+                end
+            end)
         else
             local existingGui = playerGui:FindFirstChild("MobileSelfPassGui")
             if existingGui then existingGui:Destroy() end
@@ -2060,6 +2107,9 @@ lock_sec:toggle({
                 return
             end
 
+            local existing = playerGui:FindFirstChild('MobileLockGui')
+            if existing then existing:Destroy() end
+
             mobileGui = Instance.new('ScreenGui')
             mobileGui.Name = 'MobileLockGui'
             mobileGui.ResetOnSpawn = false
@@ -2068,7 +2118,7 @@ lock_sec:toggle({
             mobileBtn = Instance.new('TextButton')
             mobileBtn.Name = 'LockButton'
             mobileBtn.Size = UDim2.new(0, 100, 0, 40)
-            mobileBtn.Position = UDim2.new(0.9, -50, 0.1, -20)
+            mobileBtn.Position = loadMobilePos("MobileLockGui") or UDim2.new(0.9, -50, 0.1, -20)
             mobileBtn.AnchorPoint = Vector2.new(0.5, 0.5)
             mobileBtn.BackgroundColor3 = Color3.fromRGB(255, 0, 0)
             mobileBtn.BorderSizePixel = 0
@@ -2085,6 +2135,12 @@ lock_sec:toggle({
 
             mobileBtn.Active = true
             mobileBtn.Draggable = true
+            
+            mobileBtn.InputEnded:Connect(function(input)
+                if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+                    saveMobilePos("MobileLockGui", mobileBtn.Position)
+                end
+            end)
 
             mobileBtn.MouseButton1Click:Connect(function()
                 if ArurHubData.HasBall() then
@@ -2156,6 +2212,15 @@ hud_settings:toggle({
     enabled = false,
     default = false,
     callback = function(v) ArurHubData.TargetHUDDisplayName = v end
+})
+
+hud_settings:slider({
+    name = "Scale",
+    min = 0.5, max = 2.0, default = 1.0, interval = 0.05,
+    callback = function(v) 
+        ArurHubData.TargetHUDScale = v
+        updateTargetHUDScale()
+    end
 })
 
 -- MISC TAB (Balanced Layout)
