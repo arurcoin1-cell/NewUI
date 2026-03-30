@@ -3,7 +3,7 @@ repeat task.wait() until game:GetService("Players").LocalPlayer and game:GetServ
 
 local library = loadstring(game:HttpGet("https://raw.githubusercontent.com/arurcoin1-cell/NewUI/refs/heads/main/Source"))()
 -- [ FIX FOR INTERNAL LIBRARY ERRORS ] --
--- If the library's internal code refers to a global 'library' variable, ensure it exists.
+-- aIf the library's internal code refers to a global 'library' variable, ensure it exists.
 if getgenv().library and not _G.library then _G.library = getgenv().library end
 if library and not _G.library then _G.library = library end
 
