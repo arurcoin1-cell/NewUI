@@ -1,7 +1,7 @@
 if not game:IsLoaded() then game.Loaded:Wait() end
 repeat task.wait() until game:GetService("Players").LocalPlayer and game:GetService("Players").LocalPlayer.Character and game:GetService("Players").LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
 
-local library = loadstring(game:HttpGet("https://raw.githubusercontent.com/arurcoin1-cell/NewUI/refs/heads/main/Source"))()
+local library = loadstring(readfile("Millenial_UI.lua"))()
 -- [ FIX FOR INTERNAL LIBRARY ERRORS ] --
 -- If the library's internal code refers to a global 'library' variable, ensure it exists.
 if getgenv().library and not _G.library then _G.library = getgenv().library end
@@ -427,7 +427,6 @@ local ArurHubData = {
     AimbotMode = "Low Arc",
     JumpWaitTime = 0.25,
     RandomizeWait = false,
-    XOffset = 0,
     TeamGoalCheckEnabled = false,
     
     MagnetEnabled = false,
@@ -483,6 +482,14 @@ local notificationGui = Instance.new('ScreenGui')
 notificationGui.Name = 'NotificationGui'
 notificationGui.Parent = playerGui
 notificationGui.ResetOnSpawn = false
+
+if isMobile or uis.TouchEnabled then
+    local uiScale = Instance.new("UIScale", notificationGui)
+    uiScale.Scale = math.clamp(camera.ViewportSize.Y / 750, 0.5, 0.9)
+    camera:GetPropertyChangedSignal("ViewportSize"):Connect(function()
+        uiScale.Scale = math.clamp(camera.ViewportSize.Y / 750, 0.5, 0.9)
+    end)
+end
 
 local notifications = {}
 
@@ -1135,6 +1142,66 @@ pcall(function()
 end)
 
 -- [ UI INITIALIZATION ] --
+local function createMobileToggle(name, uiName, dataKey, toggleObj, positionOffset)
+    local stateKey = "mobile_" .. uiName:lower() .. "_gui"
+    local mobileGui, mobileBtn, heartbeat
+    
+    return function(state)
+        if state then
+            if not isMobile then
+                SendNotification('Mobile only feature.', 3, Color3.fromRGB(220, 20, 60))
+                return
+            end
+
+            mobileGui = Instance.new('ScreenGui')
+            mobileGui.Name = stateKey
+            mobileGui.ResetOnSpawn = false
+            mobileGui.Parent = playerGui
+
+            mobileBtn = Instance.new('TextButton')
+            mobileBtn.Name = 'ToggleButton'
+            mobileBtn.Size = UDim2.new(0, 100, 0, 40)
+            mobileBtn.Position = UDim2.new(0.9, -50, 0.2, positionOffset)
+            mobileBtn.AnchorPoint = Vector2.new(0.5, 0.5)
+            mobileBtn.BackgroundColor3 = Color3.fromRGB(255, 0, 0)
+            mobileBtn.BorderSizePixel = 0
+            mobileBtn.AutoButtonColor = false
+            mobileBtn.Text = name
+            mobileBtn.TextColor3 = Color3.new(1, 1, 1)
+            mobileBtn.Font = Enum.Font.SourceSansBold
+            mobileBtn.TextScaled = true
+            mobileBtn.Parent = mobileGui
+
+            local corner = Instance.new('UICorner')
+            corner.CornerRadius = UDim.new(0, 20)
+            corner.Parent = mobileBtn
+
+            mobileBtn.Active = true
+            mobileBtn.Draggable = true
+
+            mobileBtn.MouseButton1Click:Connect(function()
+                if toggleObj then
+                    toggleObj.set(not ArurHubData[dataKey])
+                end
+            end)
+
+            heartbeat = run_service.RenderStepped:Connect(function()
+                if not mobileBtn or not mobileBtn.Parent then
+                    if heartbeat then heartbeat:Disconnect() end
+                    return
+                end
+                mobileBtn.BackgroundColor3 = ArurHubData[dataKey] and Color3.fromRGB(0, 255, 0) or Color3.fromRGB(255, 0, 0)
+            end)
+            
+            SendNotification("Mobile UI Enabled", 3, Color3.fromRGB(0, 255, 0))
+        else
+            if heartbeat then heartbeat:Disconnect(); heartbeat = nil end
+            if mobileGui then mobileGui:Destroy(); mobileGui = nil; mobileBtn = nil end
+            SendNotification("Mobile UI Disabled", 3, Color3.fromRGB(255, 0, 0))
+        end
+    end
+end
+
 local window = library:window({name = "ArurHub", suffix = "", gameInfo = "Hoopz"})
 
 local aimbot_tab = window:tab({name = "Aimbot", tabs = {"Main"}})
@@ -1170,6 +1237,15 @@ aim_enabled_toggle = aim_sec:toggle({
 })
 
 local aim_settings = aim_enabled_toggle:settings({})
+aim_settings:toggle({
+    name = "Enable Mobile UI",
+    flag = "mobile_aimbot_ui",
+    type = "checkbox",
+    enabled = false,
+    default = false,
+    callback = createMobileToggle("Aimbot", "Aimbot", "AimbotEnabled", aim_enabled_toggle, -60)
+})
+
 aim_keybind = aim_settings:keybind({
     name = "Keybind",
     key = Enum.KeyCode.F,
@@ -1215,18 +1291,6 @@ aim_sec:toggle({
     end
 })
 
-aim_sec:slider({
-    name = "Mobile Camera X Offset",
-    min = -100, max = 100, default = 0, interval = 1,
-    callback = function(v)
-        if not isMobile then
-            SendNotification("Mobile only.", 3)
-            ArurHubData.XOffset = 0
-            return
-        end
-        ArurHubData.XOffset = v
-    end
-})
 
 aim_sec:toggle({
     name = "Team Goal Check",
@@ -1743,6 +1807,15 @@ full_mag_toggle = mag_sec:toggle({
     end
 })
 local full_mag_settings = full_mag_toggle:settings({})
+full_mag_settings:toggle({
+    name = "Enable Mobile UI",
+    flag = "mobile_full_mag_ui",
+    type = "checkbox",
+    enabled = false,
+    default = false,
+    callback = createMobileToggle("Full Magnet", "FullMagnet", "MagnetEnabled", full_mag_toggle, -15)
+})
+
 full_mag_keybind = full_mag_settings:keybind({
     name = "Keybind",
     key = Enum.KeyCode.N,
@@ -1783,6 +1856,15 @@ shot_mag_toggle = mag_sec:toggle({
     end
 })
 local shot_mag_settings = shot_mag_toggle:settings({})
+shot_mag_settings:toggle({
+    name = "Enable Mobile UI",
+    flag = "mobile_shot_mag_ui",
+    type = "checkbox",
+    enabled = false,
+    default = false,
+    callback = createMobileToggle("Shot Magnet", "ShotMagnet", "ShotMagnetEnabled", shot_mag_toggle, 30)
+})
+
 shot_mag_keybind = shot_mag_settings:keybind({
     name = "Keybind",
     key = Enum.KeyCode.U,
@@ -1805,15 +1887,25 @@ mag_sec:slider({
 })
 
 local reach_sec = ball_col2:section({name = "Reach", default = true})
-reach_sec:toggle({
+local reach_enabled_toggle = reach_sec:toggle({
     name = "Reach Enabled",
     flag = "reach_enabled",
     type = "checkbox",
     enabled = false,
     default = false,
-    callback = function(v)            ArurHubData.ReachEnabled = v 
+    callback = function(v) ArurHubData.ReachEnabled = v 
         SendNotification(v and 'Reach Enabled' or 'Reach Disabled', 3, v and Color3.fromRGB(0, 255, 0) or Color3.fromRGB(255, 0, 0))
     end
+})
+
+local reach_settings = reach_enabled_toggle:settings({})
+reach_settings:toggle({
+    name = "Enable Mobile UI",
+    flag = "mobile_reach_ui",
+    type = "checkbox",
+    enabled = false,
+    default = false,
+    callback = createMobileToggle("Reach", "Reach", "ReachEnabled", reach_enabled_toggle, 75)
 })
 reach_sec:slider({
     name = "Reach Distance",
@@ -1846,6 +1938,15 @@ speed_toggle = walk_sec:toggle({
     end
 })
 local speed_settings = speed_toggle:settings({})
+speed_settings:toggle({
+    name = "Enable Mobile UI",
+    flag = "mobile_speed_ui",
+    type = "checkbox",
+    enabled = false,
+    default = false,
+    callback = createMobileToggle("Speed", "Speed", "SpeedBypassEnabled", speed_toggle, 120)
+})
+
 speed_keybind = speed_settings:keybind({
     name = "Keybind",
     key = Enum.KeyCode.X,
