@@ -4,7 +4,7 @@ repeat task.wait() until game:GetService("Players").LocalPlayer and game:GetServ
 -- Globally suppress all notifications during UI creation & auto-load
 if getgenv then getgenv().ArurHub_SuppressNotifs = true end
 
-local library = loadstring(game:HttpGet("https://raw.githubusercontent.com/arurcoin1-cell/NewUI/refs/heads/main/Source"))()
+local library = loadstring(game:HttpGet("https://raw.githubusercontent.com/arurcoin1-cell/NewUI/main/Source"))()
 -- [ FIX FOR INTERNAL LIBRARY ERRORS ] --
 -- If the library's internal code refers to a global 'library' variable, ensure it exists.
 if getgenv().library and not _G.library then _G.library = getgenv().library end
@@ -1278,29 +1278,6 @@ local function createMobileToggle(name, uiName, dataKey, toggleObj, positionOffs
             dot.AnchorPoint      = Vector2.new(0, 0.5)
             dot.BackgroundColor3 = Color3.fromRGB(220, 50, 80)
             dot.BorderSizePixel  = 0
-            
-            -- Inject a small status dot into the right side of the button
-            task.defer(function()
-                if autoload_btn and autoload_btn.items and autoload_btn.items["button"] then
-                    autoload_dot = library:create("Frame", {
-                        Size             = dim2(0, 7, 0, 7);
-                        Position         = dim2(1, -10, 0.5, 0);
-                        AnchorPoint      = vec2(1, 0.5);
-                        BackgroundColor3 = Color3.fromRGB(180, 60, 60);
-                        BorderSizePixel  = 0;
-                        ZIndex           = 5;
-                        Parent           = autoload_btn.items["button"];
-                    })
-                    library:create("UICorner", { Parent = autoload_dot; CornerRadius = dim(1, 0) })
-
-                    -- Read current state and set dot color
-                    local ok, current = pcall(readfile, "arurhub_autoload.txt")
-                    if ok and current and current ~= "" then
-                        autoload_dot.BackgroundColor3 = Color3.fromRGB(80, 210, 120)
-                    end
-                end
-            end)
-            
             Instance.new('UICorner', dot).CornerRadius = UDim.new(1, 0)
 
             -- Label
@@ -1541,24 +1518,44 @@ pass_sec:toggle({
 
             local selfPassBtn = Instance.new("TextButton")
             selfPassBtn.Name = "SelfPassButton"
-            selfPassBtn.Size = UDim2.new(0, 100, 0, 40)
+            selfPassBtn.Size = UDim2.fromOffset(110, 36)
             selfPassBtn.Position = loadMobilePos("MobileSelfPassGui") or UDim2.new(0.9, -50, 0.2, -20)
             selfPassBtn.AnchorPoint = Vector2.new(0.5, 0.5)
-            selfPassBtn.BackgroundColor3 = Color3.fromRGB(30, 144, 255)
+            selfPassBtn.BackgroundColor3 = Color3.fromRGB(22, 22, 28)
             selfPassBtn.BorderSizePixel = 0
             selfPassBtn.AutoButtonColor = false
-            selfPassBtn.Text = "Self Pass"
-            selfPassBtn.TextColor3 = Color3.new(1, 1, 1)
-            selfPassBtn.Font = Enum.Font.SourceSansBold
-            selfPassBtn.TextScaled = true
-            selfPassBtn.Parent = mobileGui2
-
-            local corner = Instance.new("UICorner")
-            corner.CornerRadius = UDim.new(0, 20)
-            corner.Parent = selfPassBtn
-
+            selfPassBtn.Text = ""
             selfPassBtn.Active = true
             selfPassBtn.Draggable = true
+            selfPassBtn.Parent = mobileGui2
+
+            Instance.new("UICorner", selfPassBtn).CornerRadius = UDim.new(1, 0)
+
+            local btnStroke = Instance.new("UIStroke", selfPassBtn)
+            btnStroke.Thickness = 1.5
+            btnStroke.Color = Color3.fromRGB(30, 144, 255)
+            btnStroke.Transparency = 0.2
+
+            local dot = Instance.new("Frame", selfPassBtn)
+            dot.Name = "Dot"
+            dot.Size = UDim2.fromOffset(7, 7)
+            dot.Position = UDim2.new(0, 10, 0.5, 0)
+            dot.AnchorPoint = Vector2.new(0, 0.5)
+            dot.BackgroundColor3 = Color3.fromRGB(30, 144, 255)
+            dot.BorderSizePixel = 0
+            Instance.new("UICorner", dot).CornerRadius = UDim.new(1, 0)
+
+            local lbl = Instance.new("TextLabel", selfPassBtn)
+            lbl.Name = "Title"
+            lbl.Size = UDim2.new(1, -26, 1, 0)
+            lbl.Position = UDim2.new(0, 22, 0, 0)
+            lbl.BackgroundTransparency = 1
+            lbl.TextColor3 = Color3.fromRGB(220, 220, 230)
+            lbl.Font = Enum.Font.GothamBold
+            lbl.TextSize = 11
+            lbl.Text = "Self Pass"
+            lbl.TextXAlignment = Enum.TextXAlignment.Left
+            lbl.TextTruncate = Enum.TextTruncate.AtEnd
 
             selfPassBtn.MouseButton1Click:Connect(performSelfPass)
             
@@ -2224,24 +2221,44 @@ lock_sec:toggle({
 
             mobileBtn = Instance.new('TextButton')
             mobileBtn.Name = 'LockButton'
-            mobileBtn.Size = UDim2.new(0, 100, 0, 40)
+            mobileBtn.Size = UDim2.fromOffset(110, 36)
             mobileBtn.Position = loadMobilePos("MobileLockGui") or UDim2.new(0.9, -50, 0.1, -20)
             mobileBtn.AnchorPoint = Vector2.new(0.5, 0.5)
-            mobileBtn.BackgroundColor3 = Color3.fromRGB(255, 0, 0)
+            mobileBtn.BackgroundColor3 = Color3.fromRGB(22, 22, 28)
             mobileBtn.BorderSizePixel = 0
             mobileBtn.AutoButtonColor = false
-            mobileBtn.Text = 'Lock Button'
-            mobileBtn.TextColor3 = Color3.new(1, 1, 1)
-            mobileBtn.Font = Enum.Font.SourceSansBold
-            mobileBtn.TextScaled = true
-            mobileBtn.Parent = mobileGui
-
-            local corner = Instance.new('UICorner')
-            corner.CornerRadius = UDim.new(0, 20)
-            corner.Parent = mobileBtn
-
+            mobileBtn.Text = ''
             mobileBtn.Active = true
             mobileBtn.Draggable = true
+            mobileBtn.Parent = mobileGui
+
+            Instance.new("UICorner", mobileBtn).CornerRadius = UDim.new(1, 0)
+
+            local btnStroke = Instance.new("UIStroke", mobileBtn)
+            btnStroke.Thickness = 1.5
+            btnStroke.Color = Color3.fromRGB(220, 50, 80)
+            btnStroke.Transparency = 0.2
+
+            local dot = Instance.new("Frame", mobileBtn)
+            dot.Name = "Dot"
+            dot.Size = UDim2.fromOffset(7, 7)
+            dot.Position = UDim2.new(0, 10, 0.5, 0)
+            dot.AnchorPoint = Vector2.new(0, 0.5)
+            dot.BackgroundColor3 = Color3.fromRGB(220, 50, 80)
+            dot.BorderSizePixel = 0
+            Instance.new("UICorner", dot).CornerRadius = UDim.new(1, 0)
+
+            local lbl = Instance.new("TextLabel", mobileBtn)
+            lbl.Name = "Title"
+            lbl.Size = UDim2.new(1, -26, 1, 0)
+            lbl.Position = UDim2.new(0, 22, 0, 0)
+            lbl.BackgroundTransparency = 1
+            lbl.TextColor3 = Color3.fromRGB(220, 220, 230)
+            lbl.Font = Enum.Font.GothamBold
+            lbl.TextSize = 11
+            lbl.Text = "Lock On"
+            lbl.TextXAlignment = Enum.TextXAlignment.Left
+            lbl.TextTruncate = Enum.TextTruncate.AtEnd
             
             mobileBtn.InputEnded:Connect(function(input)
                 if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
@@ -2264,13 +2281,16 @@ lock_sec:toggle({
                 end
                 if ArurHubData.HasBall() then
                     if ArurHubData.LockToPlayer then lock_toggle.set(false) end
-                    mobileBtn.BackgroundColor3 = Color3.fromRGB(150, 0, 0)
-                    mobileBtn.Text = 'Locked (Ball)'
+                    dot.BackgroundColor3 = Color3.fromRGB(255, 165, 0)
+                    btnStroke.Color = Color3.fromRGB(255, 165, 0)
+                    lbl.Text = 'Locked (Ball)'
                     mobileBtn.Active = false
                 else
-                    mobileBtn.Text = 'Lock Button'
+                    lbl.Text = 'Lock On'
                     mobileBtn.Active = true
-                    mobileBtn.BackgroundColor3 = ArurHubData.LockToPlayer and Color3.fromRGB(0, 255, 0) or Color3.fromRGB(255, 0, 0)
+                    local col = ArurHubData.LockToPlayer and Color3.fromRGB(80, 220, 120) or Color3.fromRGB(220, 50, 80)
+                    dot.BackgroundColor3 = col
+                    btnStroke.Color = col
                 end
             end)
         else
