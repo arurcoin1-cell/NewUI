@@ -299,7 +299,7 @@
                 if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
                     dragging = true
                     start = input.Position
-                    start_pos = frame.AbsolutePosition
+                    start_pos = frame.Position
                 end
             end)
 
@@ -311,20 +311,10 @@
 
             library:connection(uis.InputChanged, function(input) 
                 if dragging and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
-                    local viewport = camera.ViewportSize
-                    local anchor = frame.AnchorPoint
-                    local size = frame.AbsoluteSize
-                    
-                    local tx = start_pos.X + (input.Position.X - start.X)
-                    local ty = start_pos.Y + (input.Position.Y - start.Y)
+                    local delta = input.Position - start
+                    local current_position = dim2(start_pos.X.Scale, start_pos.X.Offset + delta.X, start_pos.Y.Scale, start_pos.Y.Offset + delta.Y)
 
-                    local current_position = dim2(0, 
-                        math.clamp(tx, anchor.X * size.X, viewport.X - ((1 - anchor.X) * size.X)),
-                        0, 
-                        math.clamp(ty, anchor.Y * size.Y, viewport.Y - ((1 - anchor.Y) * size.Y))
-                    )
-
-                    -- Use direct position for mobile dragging to avoid "jitter" and lag
+                    -- Stickiness and no drift: Use direct position for Touch, Tween for Mouse
                     if input.UserInputType == Enum.UserInputType.Touch then
                         frame.Position = current_position
                     else
@@ -557,6 +547,7 @@
                     
                     toggle_btn.MouseButton1Click:Connect(function()
                         items["main"].Visible = not items["main"].Visible
+                        library:close_element() -- Sync: Close gears/dropdowns when toggling
                     end)
                     
                     library:draggify(toggle_btn) -- [ ENABLES DRAGGING FOR TOGGLE BUTTON ] --                    
@@ -2838,15 +2829,20 @@
             end
             
             function cfg.update_color(input_pos) 
-                local offset = vec2(input_pos.X, input_pos.Y) 
+                local absolute_pos = items["sat"].AbsolutePosition
+                local absolute_size = items["sat"].AbsoluteSize
 
                 if dragging_sat then	
-                    s = math.clamp((offset - items["sat"].AbsolutePosition).X / items["sat"].AbsoluteSize.X, 0, 1)
-                    v = 1 - math.clamp((offset - items["sat"].AbsolutePosition).Y / items["sat"].AbsoluteSize.Y, 0, 1)
+                    s = math.clamp((input_pos.X - absolute_pos.X) / absolute_size.X, 0, 1)
+                    v = 1 - math.clamp((input_pos.Y - absolute_pos.Y) / absolute_size.Y, 0, 1)
                 elseif dragging_hue then
-                    h = math.clamp((offset - items[ "hue_gradient" ].AbsolutePosition).X / items[ "hue_gradient" ].AbsoluteSize.X, 0, 1)
+                    local h_pos = items["hue_gradient"].AbsolutePosition
+                    local h_size = items["hue_gradient"].AbsoluteSize
+                    h = math.clamp((input_pos.X - h_pos.X) / h_size.X, 0, 1)
                 elseif dragging_alpha then
-                    a = 1 - math.clamp((offset - items[ "alpha_gradient" ].AbsolutePosition).X / items[ "alpha_gradient" ].AbsoluteSize.X, 0, 1)
+                    local a_pos = items["alpha_gradient"].AbsolutePosition
+                    local a_size = items["alpha_gradient"].AbsoluteSize
+                    a = 1 - math.clamp((input_pos.X - a_pos.X) / a_size.X, 0, 1)
                 end
 
                 cfg.set()
