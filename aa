@@ -1,7 +1,10 @@
 if not game:IsLoaded() then game.Loaded:Wait() end
 repeat task.wait() until game:GetService("Players").LocalPlayer and game:GetService("Players").LocalPlayer.Character and game:GetService("Players").LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
 
-local library = loadstring(game:HttpGet("https://raw.githubusercontent.com/arurcoin1-cell/NewUI/main/Source"))()
+-- Globally suppress all notifications during UI creation & auto-load
+if getgenv then getgenv().ArurHub_SuppressNotifs = true end
+
+local library = loadstring(readfile("Millenial_UI.lua"))()
 -- [ FIX FOR INTERNAL LIBRARY ERRORS ] --
 -- If the library's internal code refers to a global 'library' variable, ensure it exists.
 if getgenv().library and not _G.library then _G.library = getgenv().library end
@@ -450,7 +453,7 @@ local ArurHubData = {
     LockedPlayer = nil,
     PredictionOffset = 1.0,
     
-    HideNotifications = false,
+    HideNotifications = true, -- suppressed during startup, re-enabled after load
 
     ShowRange = false,
     OnlyShowWithAimbot = true,
@@ -739,62 +742,117 @@ local sync_guards = {
 
 local function SendNotification(message, time, color)
     if ArurHubData.HideNotifications then return end
+    if getgenv and getgenv().ArurHub_SuppressNotifs then return end
     time = time or 5
-    color = color or Color3.fromRGB(0, 170, 255)
+    color = color or Color3.fromRGB(130, 120, 255)
 
+    local CARD_W    = 260
+    local CARD_H    = 44
+    local STACK_GAP = CARD_H + 8
+    local idx       = #notifications + 1
+    local startY    = -(60 + (idx - 1) * STACK_GAP)
+
+    -- Root holder (slides in from right)
     local notifHolder = Instance.new('Frame')
+    notifHolder.Name          = 'NotifCard'
+    notifHolder.Size          = UDim2.fromOffset(CARD_W, CARD_H)
+    notifHolder.Position      = UDim2.new(1, 20, 1, startY)
+    notifHolder.AnchorPoint   = Vector2.new(0, 1)
     notifHolder.BackgroundTransparency = 1
-    notifHolder.Size = UDim2.new(0, 300, 0, 30)
-    notifHolder.Position = UDim2.new(1, -310, 1, -75 - (#notifications * 35))
-    notifHolder.AnchorPoint = Vector2.new(0, 0)
-    notifHolder.Parent = notificationGui
-    notifHolder.ZIndex = 1400
+    notifHolder.Parent        = notificationGui
+    notifHolder.ZIndex        = 1400
 
-    local background = Instance.new('Frame')
-    background.Size = UDim2.new(1, 0, 1, 0)
-    background.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
-    background.Parent = notifHolder
-    background.ZIndex = 1400
+    -- Dark card background
+    local card = Instance.new('Frame', notifHolder)
+    card.Size                 = UDim2.fromScale(1, 1)
+    card.BackgroundColor3     = Color3.fromRGB(18, 18, 22)
+    card.BackgroundTransparency = 0.05
+    card.BorderSizePixel      = 0
+    card.ClipsDescendants     = true
+    card.ZIndex               = 1400
+    Instance.new('UICorner', card).CornerRadius = UDim.new(0, 10)
 
-    local accentBar = Instance.new('Frame')
-    accentBar.Size = UDim2.new(0, 5, 1, 0)
-    accentBar.BackgroundColor3 = color
-    accentBar.Parent = background
-    accentBar.ZIndex = 1401
+    -- Subtle outer stroke
+    local stroke = Instance.new('UIStroke', card)
+    stroke.Color       = Color3.fromRGB(60, 60, 70)
+    stroke.Thickness   = 1
+    stroke.Transparency = 0.5
 
-    local textLabel = Instance.new('TextLabel')
-    textLabel.Size = UDim2.new(1, -10, 1, 0)
-    textLabel.Position = UDim2.new(0, 10, 0, 0)
-    textLabel.BackgroundTransparency = 1
-    textLabel.TextColor3 = Color3.new(1, 1, 1)
-    textLabel.TextStrokeTransparency = 0
-    textLabel.Text = message
-    textLabel.Font = Enum.Font.SourceSansBold
-    textLabel.TextSize = 18
-    textLabel.TextXAlignment = Enum.TextXAlignment.Left
-    textLabel.Parent = background
-    textLabel.ZIndex = 1402
+    -- Colored left accent bar
+    local accent = Instance.new('Frame', card)
+    accent.Size              = UDim2.new(0, 3, 1, -12)
+    accent.Position          = UDim2.new(0, 8, 0, 6)
+    accent.AnchorPoint       = Vector2.new(0, 0)
+    accent.BackgroundColor3  = color
+    accent.BorderSizePixel   = 0
+    accent.ZIndex            = 1401
+    Instance.new('UICorner', accent).CornerRadius = UDim.new(1, 0)
 
-    local tweenIn = tween_service:Create(notifHolder, TweenInfo.new(0.2), {Position = UDim2.new(1, -310, 1, -75 - (#notifications * 35))})
-    tweenIn:Play()
+    -- Message text
+    local label = Instance.new('TextLabel', card)
+    label.Size                = UDim2.new(1, -28, 1, 0)
+    label.Position            = UDim2.new(0, 20, 0, 0)
+    label.BackgroundTransparency = 1
+    label.TextColor3          = Color3.fromRGB(230, 230, 235)
+    label.TextStrokeTransparency = 1
+    label.Text                = message
+    label.Font                = Enum.Font.GothamMedium
+    label.TextSize            = 13
+    label.TextXAlignment      = Enum.TextXAlignment.Left
+    label.TextYAlignment      = Enum.TextYAlignment.Center
+    label.TextTruncate        = Enum.TextTruncate.AtEnd
+    label.ZIndex              = 1402
+
+    -- Progress bar (shrinks over `time` seconds)
+    local progressBg = Instance.new('Frame', card)
+    progressBg.Size              = UDim2.new(1, -30, 0, 2)
+    progressBg.Position          = UDim2.new(0, 20, 1, -5)
+    progressBg.AnchorPoint       = Vector2.new(0, 1)
+    progressBg.BackgroundColor3  = Color3.fromRGB(40, 40, 50)
+    progressBg.BorderSizePixel   = 0
+    progressBg.ZIndex            = 1403
+    Instance.new('UICorner', progressBg).CornerRadius = UDim.new(1, 0)
+
+    local progressBar = Instance.new('Frame', progressBg)
+    progressBar.Size             = UDim2.fromScale(1, 1)
+    progressBar.BackgroundColor3 = color
+    progressBar.BorderSizePixel  = 0
+    progressBar.ZIndex           = 1404
+    Instance.new('UICorner', progressBar).CornerRadius = UDim.new(0, 2)
+
+    -- Slide in
+    local slideIn = tween_service:Create(notifHolder,
+        TweenInfo.new(0.3, Enum.EasingStyle.Quint, Enum.EasingDirection.Out),
+        {Position = UDim2.new(1, -(CARD_W + 12), 1, startY)}
+    )
+    slideIn:Play()
+
+    -- Shrink progress bar
+    tween_service:Create(progressBar,
+        TweenInfo.new(time, Enum.EasingStyle.Linear),
+        {Size = UDim2.fromScale(0, 1)}
+    ):Play()
 
     table.insert(notifications, notifHolder)
 
     local function removeNotification()
-        local tweenOut = tween_service:Create(notifHolder, TweenInfo.new(0.25), {Position = UDim2.new(1, 310, 1, notifHolder.Position.Y.Offset)})
+        local tweenOut = tween_service:Create(notifHolder,
+            TweenInfo.new(0.25, Enum.EasingStyle.Quint, Enum.EasingDirection.In),
+            {Position = UDim2.new(1, 20, 1, notifHolder.Position.Y.Offset)}
+        )
         tweenOut:Play()
         tweenOut.Completed:Wait()
         notifHolder:Destroy()
 
         for i, v in ipairs(notifications) do
-            if v == notifHolder then
-                table.remove(notifications, i)
-                break
-            end
+            if v == notifHolder then table.remove(notifications, i) break end
         end
-
         for i, notif in ipairs(notifications) do
-            tween_service:Create(notif, TweenInfo.new(0.15), {Position = UDim2.new(1, -310, 1, -75 - ((i - 1) * 35))}):Play()
+            local newY = -(60 + (i - 1) * STACK_GAP)
+            tween_service:Create(notif,
+                TweenInfo.new(0.2, Enum.EasingStyle.Quint, Enum.EasingDirection.Out),
+                {Position = UDim2.new(1, -(CARD_W + 12), 1, newY)}
+            ):Play()
         end
     end
 
@@ -1178,7 +1236,7 @@ local function createMobileToggle(name, uiName, dataKey, toggleObj, positionOffs
     return function(state)
         if state then
             if not isMobile then
-                SendNotification('Mobile only feature.', 3, Color3.fromRGB(220, 20, 60))
+                SendNotification('Mobile only feature.', 3, Color3.fromRGB(220, 40, 70))
                 return
             end
 
@@ -1190,33 +1248,79 @@ local function createMobileToggle(name, uiName, dataKey, toggleObj, positionOffs
             mobileGui.ResetOnSpawn = false
             mobileGui.Parent = playerGui
 
+            -- Pill button
             mobileBtn = Instance.new('TextButton')
-            mobileBtn.Name = 'ToggleButton'
-            mobileBtn.Size = UDim2.new(0, 100, 0, 40)
-            mobileBtn.Position = loadMobilePos(stateKey) or UDim2.new(0.9, -50, 0.2, positionOffset)
-            mobileBtn.AnchorPoint = Vector2.new(0.5, 0.5)
-            mobileBtn.BackgroundColor3 = Color3.fromRGB(255, 0, 0)
+            mobileBtn.Name            = 'ToggleButton'
+            mobileBtn.Size            = UDim2.fromOffset(110, 36)
+            mobileBtn.Position        = loadMobilePos(stateKey) or UDim2.new(0.9, -55, 0.2, positionOffset)
+            mobileBtn.AnchorPoint     = Vector2.new(0.5, 0.5)
+            mobileBtn.BackgroundColor3 = Color3.fromRGB(22, 22, 28)
             mobileBtn.BorderSizePixel = 0
             mobileBtn.AutoButtonColor = false
-            mobileBtn.Text = name
-            mobileBtn.TextColor3 = Color3.new(1, 1, 1)
-            mobileBtn.Font = Enum.Font.SourceSansBold
-            mobileBtn.TextScaled = true
-            mobileBtn.Parent = mobileGui
+            mobileBtn.Text            = ''
+            mobileBtn.Active          = true
+            mobileBtn.Draggable       = true
+            mobileBtn.Parent          = mobileGui
 
-            local corner = Instance.new('UICorner')
-            corner.CornerRadius = UDim.new(0, 20)
-            corner.Parent = mobileBtn
+            Instance.new('UICorner', mobileBtn).CornerRadius = UDim.new(1, 0)
 
-            mobileBtn.Active = true
-            mobileBtn.Draggable = true
+            -- Outer glow stroke (starts red)
+            local btnStroke = Instance.new('UIStroke', mobileBtn)
+            btnStroke.Thickness   = 1.5
+            btnStroke.Color       = Color3.fromRGB(220, 50, 80)
+            btnStroke.Transparency = 0.2
+
+            -- Status dot
+            local dot = Instance.new('Frame', mobileBtn)
+            dot.Name             = 'Dot'
+            dot.Size             = UDim2.fromOffset(7, 7)
+            dot.Position         = UDim2.new(0, 10, 0.5, 0)
+            dot.AnchorPoint      = Vector2.new(0, 0.5)
+            dot.BackgroundColor3 = Color3.fromRGB(220, 50, 80)
+            dot.BorderSizePixel  = 0
+            
+            -- Inject a small status dot into the right side of the button
+            task.defer(function()
+                if autoload_btn and autoload_btn.items and autoload_btn.items["button"] then
+                    autoload_dot = library:create("Frame", {
+                        Size             = dim2(0, 7, 0, 7);
+                        Position         = dim2(1, -10, 0.5, 0);
+                        AnchorPoint      = vec2(1, 0.5);
+                        BackgroundColor3 = Color3.fromRGB(180, 60, 60);
+                        BorderSizePixel  = 0;
+                        ZIndex           = 5;
+                        Parent           = autoload_btn.items["button"];
+                    })
+                    library:create("UICorner", { Parent = autoload_dot; CornerRadius = dim(1, 0) })
+
+                    -- Read current state and set dot color
+                    local ok, current = pcall(readfile, "arurhub_autoload.txt")
+                    if ok and current and current ~= "" then
+                        autoload_dot.BackgroundColor3 = Color3.fromRGB(80, 210, 120)
+                    end
+                end
+            end)
+            
+            Instance.new('UICorner', dot).CornerRadius = UDim.new(1, 0)
+
+            -- Label
+            local lbl = Instance.new('TextLabel', mobileBtn)
+            lbl.Size                  = UDim2.new(1, -26, 1, 0)
+            lbl.Position              = UDim2.new(0, 22, 0, 0)
+            lbl.BackgroundTransparency = 1
+            lbl.TextColor3            = Color3.fromRGB(220, 220, 230)
+            lbl.Font                  = Enum.Font.GothamBold
+            lbl.TextSize              = 11
+            lbl.Text                  = name
+            lbl.TextXAlignment        = Enum.TextXAlignment.Left
+            lbl.TextTruncate          = Enum.TextTruncate.AtEnd
 
             mobileBtn.MouseButton1Click:Connect(function()
                 if toggleObj then
                     toggleObj.set(not ArurHubData[dataKey])
                 end
             end)
-            
+
             mobileBtn.InputEnded:Connect(function(input)
                 if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
                     saveMobilePos(stateKey, mobileBtn.Position)
@@ -1228,14 +1332,17 @@ local function createMobileToggle(name, uiName, dataKey, toggleObj, positionOffs
                     if heartbeat then heartbeat:Disconnect() end
                     return
                 end
-                mobileBtn.BackgroundColor3 = ArurHubData[dataKey] and Color3.fromRGB(0, 255, 0) or Color3.fromRGB(255, 0, 0)
+                local on = ArurHubData[dataKey]
+                local col = on and Color3.fromRGB(80, 220, 120) or Color3.fromRGB(220, 50, 80)
+                dot.BackgroundColor3  = col
+                btnStroke.Color       = col
             end)
-            
-            SendNotification("Mobile UI Enabled", 3, Color3.fromRGB(0, 255, 0))
+
+            SendNotification(name .. " Mobile UI ON", 2.5, Color3.fromRGB(80, 220, 120))
         else
             if heartbeat then heartbeat:Disconnect(); heartbeat = nil end
             if mobileGui then mobileGui:Destroy(); mobileGui = nil; mobileBtn = nil end
-            SendNotification("Mobile UI Disabled", 3, Color3.fromRGB(255, 0, 0))
+            SendNotification(name .. " Mobile UI OFF", 2, Color3.fromRGB(220, 50, 80))
         end
     end
 end
@@ -2424,8 +2531,16 @@ end
 
 -- Execute Scan Systems
 task.spawn(function()
-    if not performFastGC() then
+    local ok = performFastGC()
+    if not ok then
         performBackgroundActorScan()
+        -- Wait a moment for the actor scan to possibly respond
+        task.wait(4)
+        if _G.ArurHubCode == "Oh yeah yeah" then
+            -- Neither method worked
+            task.wait(1) -- ensure SendNotification is available
+            SendNotification('Breach failed! Aimbot unavailable -- please rejoin.', 6, Color3.fromRGB(220, 80, 50))
+        end
     end
 end)
 
@@ -2746,7 +2861,9 @@ run_service.Heartbeat:Connect(function(dt)
             local myPos    = rPart.Position
             local tPosReal = tRoot.Position
             local realDist = (Vector3.new(myPos.X, 0, myPos.Z) - Vector3.new(tPosReal.X, 0, tPosReal.Z)).Magnitude
-            local scaler   = math.clamp(realDist / 6, 0.1, 1) -- Prediction starts dropping at 6 studs
+            
+            -- FIX: Prediction decreases gracefully as distance grows, dropping to 0 at ~12 studs.
+            local scaler   = math.clamp(1 - ((realDist - 4) / 8), 0, 1) 
             local tPos     = tPosReal + (tRoot.Velocity * ArurHubData.PredictionOffset * scaler)
             local dist     = (Vector2.new(myPos.X, myPos.Z) - Vector2.new(tPos.X, tPos.Z)).Magnitude
 
@@ -2970,5 +3087,32 @@ task.spawn(function()
                 ArurHubData.IsDunkingSpam = false
             end)
         end
+    end
+end)
+
+-- [ STARTUP COMPLETE ] --
+-- Re-enable notifications now that all UI callbacks have fired silently
+task.defer(function()
+    -- Auto-load config if one was saved
+    local autoloadFile = "arurhub_autoload.txt"
+    local ok, savedName = pcall(readfile, autoloadFile)
+    if ok and savedName and savedName ~= "" then
+        local cfgPath = library.directory .. "/configs/" .. savedName .. ".cfg"
+        local cfgOk, cfgData = pcall(readfile, cfgPath)
+        if cfgOk and cfgData then
+            pcall(library.load_config, library, cfgData)
+            
+            if getgenv then getgenv().ArurHub_SuppressNotifs = false end
+            ArurHubData.HideNotifications = false -- Re-enable after autoload
+            SendNotification('Config Autoloaded: ' .. savedName, 4, Color3.fromRGB(130, 120, 255))
+        else
+            if getgenv then getgenv().ArurHub_SuppressNotifs = false end
+            ArurHubData.HideNotifications = false
+            SendNotification('Autoload failed: ' .. savedName .. ' not found', 4, Color3.fromRGB(220, 140, 50))
+        end
+    else
+        if getgenv then getgenv().ArurHub_SuppressNotifs = false end
+        ArurHubData.HideNotifications = false
+        SendNotification('ArurHub Loaded!', 4, Color3.fromRGB(130, 120, 255))
     end
 end)
