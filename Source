@@ -3685,9 +3685,23 @@
             window:seperator({name = "Settings"})
             local main = window:tab({name = "Configs", tabs = {"Main"}})
             
+            local autoload_dot -- declared early so list callback closure can reference it
+
             local column = main:column({})
             local section = column:section({name = "Configs", size = 1, default = true, icon = "rbxassetid://139628202576511"})
-            config_holder = section:list({options = {"Report", "This", "Error", "To", "Finobe"}, callback = function(option) end, flag = "config_name_list"}); library:update_config_list()
+            config_holder = section:list({options = {"Report", "This", "Error", "To", "Finobe"}, callback = function(option)
+                -- Refresh dot to reflect whether this config is the auto-load target
+                task.defer(function()
+                    if autoload_dot then
+                        local ok, current = pcall(readfile, "arurhub_autoload.txt")
+                        if ok and current and current == option then
+                            autoload_dot.BackgroundColor3 = Color3.fromRGB(80, 210, 120) -- green
+                        else
+                            autoload_dot.BackgroundColor3 = Color3.fromRGB(180, 60, 60)  -- red
+                        end
+                    end
+                end)
+            end, flag = "config_name_list"}); library:update_config_list()
             
             local column = main:column({})
             local section = column:section({name = "Settings", side = "right", size = 1, default = true, icon = "rbxassetid://129380150574313"})
@@ -3698,16 +3712,18 @@
                 if name and name ~= "" then
                     writefile(library.directory .. "/configs/" .. name .. ".cfg", library:get_config()) 
                     library:update_config_list() 
-                    notifications:create_notification({name = "Configs", info = "Saved config to:\n" .. name}) 
+                    notifications:create_notification({name = "Saved: " .. name, color = Color3.fromRGB(80, 220, 120)}) 
                 end
             end}) 
 
             section:button({name = "Load", callback = function() 
                 local name = flags["config_name_list"]
                 if name and name ~= "" then
+                    if getgenv then getgenv().ArurHub_SuppressNotifs = true end
                     library:load_config(readfile(library.directory .. "/configs/" .. name .. ".cfg"))  
-                    library:update_config_list() 
-                    notifications:create_notification({name = "Configs", info = "Loaded config:\n" .. name}) 
+                    library:update_config_list()
+                    if getgenv then getgenv().ArurHub_SuppressNotifs = false end
+                    notifications:create_notification({name = "Loaded: " .. name, color = Color3.fromRGB(130, 120, 255)}) 
                 end
             end})
 
@@ -3716,9 +3732,50 @@
                 if name and name ~= "" then
                     delfile(library.directory .. "/configs/" .. name .. ".cfg")  
                     library:update_config_list() 
-                    notifications:create_notification({name = "Configs", info = "Deleted config:\n" .. name}) 
+                    notifications:create_notification({name = "Deleted: " .. name, color = Color3.fromRGB(220, 80, 80)})
                 end
             end})
+
+            local autoload_btn = section:button({name = "Auto Load", callback = function()
+                local name = flags["config_name_list"]
+                if name and name ~= "" then
+                    local autoloadFile = "arurhub_autoload.txt"
+                    local ok, current = pcall(readfile, autoloadFile)
+                    if ok and current == name then
+                        writefile(autoloadFile, "")
+                        if autoload_dot then autoload_dot.BackgroundColor3 = Color3.fromRGB(180, 60, 60) end
+                        notifications:create_notification({name = "Auto Load OFF: " .. name, color = Color3.fromRGB(220, 80, 80)})
+                    else
+                        writefile(autoloadFile, name)
+                        if autoload_dot then autoload_dot.BackgroundColor3 = Color3.fromRGB(80, 210, 120) end
+                        notifications:create_notification({name = "Auto Load ON: " .. name, color = Color3.fromRGB(80, 220, 120)})
+                    end
+                else
+                    notifications:create_notification({name = "Select a config first!", color = Color3.fromRGB(220, 140, 50)})
+                end
+            end})
+
+            -- Inject a small status dot into the right side of the button
+            task.defer(function()
+                if autoload_btn and autoload_btn.items and autoload_btn.items["button"] then
+                    autoload_dot = library:create("Frame", {
+                        Size             = dim2(0, 7, 0, 7);
+                        Position         = dim2(1, -10, 0.5, 0);
+                        AnchorPoint      = vec2(1, 0.5);
+                        BackgroundColor3 = Color3.fromRGB(180, 60, 60);
+                        BorderSizePixel  = 0;
+                        ZIndex           = 5;
+                        Parent           = autoload_btn.items["button"];
+                    })
+                    library:create("UICorner", { Parent = autoload_dot; CornerRadius = dim(1, 0) })
+
+                    -- Read current state and set dot color
+                    local ok, current = pcall(readfile, "arurhub_autoload.txt")
+                    if ok and current and current ~= "" then
+                        autoload_dot.BackgroundColor3 = Color3.fromRGB(80, 210, 120)
+                    end
+                end
+            end)
             
             section:colorpicker({name = "Menu Accent", callback = function(color, alpha) library:update_theme("accent", color) end, color = themes.preset.accent})
             section:keybind({name = "Menu Bind", callback = function(bool) window.toggle_menu(bool) end, default = true})
@@ -3742,159 +3799,151 @@
             end 
         end 
 
-        function notifications:refresh_notifs() 
-            local offset = 50
+        -- Notification container (separate ScreenGui so it stays on top and is never hidden with the menu)
+        local notif_screen = library:create("ScreenGui", {
+            Parent = coregui;
+            Name = "\\0";
+            Enabled = true;
+            ZIndexBehavior = Enum.ZIndexBehavior.Global;
+            IgnoreGuiInset = true;
+        })
+        library:apply_scale(notif_screen)
 
-            for i, v in notifications.notifs do
-                local Position = vec2(20, offset)
-                library:tween(v, {Position = dim_offset(Position.X, Position.Y)}, Enum.EasingStyle.Quad, 0.4)
-                offset += (v.AbsoluteSize.Y + 10)
+        local notif_stack = {} -- tracks active notif frames for repositioning
+
+        local CARD_W    = 260
+        local CARD_H    = 44
+        local STACK_GAP = CARD_H + 8
+
+        local function restack_notifs()
+            for i, frame in ipairs(notif_stack) do
+                local newY = -(60 + (i - 1) * STACK_GAP)
+                tween_service:Create(frame,
+                    TweenInfo.new(0.2, Enum.EasingStyle.Quint, Enum.EasingDirection.Out),
+                    { Position = dim2(1, -(CARD_W + 12), 1, newY) }
+                ):Play()
             end
-
-            return offset
         end
-        
-        function notifications:fade(path, is_fading)
-            local fading = is_fading and 1 or 0 
-            
-            library:tween(path, {BackgroundTransparency = fading}, Enum.EasingStyle.Quad, 1)
 
-            for _, instance in path:GetDescendants() do 
-                if not instance:IsA("GuiObject") then 
-                    if instance:IsA("UIStroke") then
-                        library:tween(instance, {Transparency = fading}, Enum.EasingStyle.Quad, 1)
-                    end
-        
-                    continue
-                end 
-        
-                if instance:IsA("TextLabel") then
-                    library:tween(instance, {TextTransparency = fading})
-                elseif instance:IsA("Frame") then
-                    library:tween(instance, {BackgroundTransparency = instance.Transparency and 0.6 and is_fading and 1 or 0.6}, Enum.EasingStyle.Quad, 1)
-                end
-            end
-        end 
-        
         function notifications:create_notification(options)
             local cfg = {
-                name = options.name or "This is a title!";
-                info = options.info or "This is extra info!";
+                name     = options.name     or "Notification";
+                info     = options.info     or "";
                 lifetime = options.lifetime or 3;
-                items = {};
-                outline;
+                color    = options.color    or rgb(130, 120, 255);
             }
 
-            local items = cfg.items; do 
-                items[ "notification" ] = library:create( "Frame" , {
-                    Parent = library[ "items" ];
-                    Size = dim2(0, 210, 0, 53);
-                    Name = "\0";
-                    BorderColor3 = rgb(0, 0, 0);
-                    BorderSizePixel = 0;
-                    BackgroundTransparency = 1;
-                    AnchorPoint = vec2(1, 0);
-                    AutomaticSize = Enum.AutomaticSize.Y;
-                    BackgroundColor3 = rgb(14, 14, 16)
-                });
-                
-                library:create( "UIStroke" , {
-                    Color = rgb(23, 23, 29);
-                    Parent = items[ "notification" ];
-                    Transparency = 1;
-                    ApplyStrokeMode = Enum.ApplyStrokeMode.Border
-                });
-                
-                items[ "title" ] = library:create( "TextLabel" , {
-                    FontFace = fonts.font;
-                    TextColor3 = rgb(255, 255, 255);
-                    BorderColor3 = rgb(0, 0, 0);
-                    Text = cfg.name;
-                    Parent = items[ "notification" ];
-                    Name = "\0";
-                    BackgroundTransparency = 1;
-                    Position = dim2(0, 7, 0, 6);
-                    BorderSizePixel = 0;
-                    AutomaticSize = Enum.AutomaticSize.XY;
-                    TextSize = 14;
-                    BackgroundColor3 = rgb(255, 255, 255)
-                });
-                
-                library:create( "UICorner" , {
-                    Parent = items[ "notification" ];
-                    CornerRadius = dim(0, 3)
-                });
-                
-                items[ "info" ] = library:create( "TextLabel" , {
-                    FontFace = fonts.font;
-                    TextColor3 = rgb(145, 145, 145);
-                    BorderColor3 = rgb(0, 0, 0);
-                    Text = cfg.info;
-                    Parent = items[ "notification" ];
-                    Name = "\0";
-                    Position = dim2(0, 9, 0, 22);
-                    BorderSizePixel = 0;
-                    BackgroundTransparency = 1;
-                    TextXAlignment = Enum.TextXAlignment.Left;
-                    TextWrapped = true;
-                    AutomaticSize = Enum.AutomaticSize.XY;
-                    TextSize = 14;
-                    BackgroundColor3 = rgb(255, 255, 255)
-                });
-                
-                library:create( "UIPadding" , {
-                    PaddingBottom = dim(0, 17);
-                    PaddingRight = dim(0, 8);
-                    Parent = items[ "info" ]
-                });
-                
-                items[ "bar" ] = library:create( "Frame" , {
-                    AnchorPoint = vec2(0, 1);
-                    Parent = items[ "notification" ];
-                    Name = "\0";
-                    Position = dim2(0, 8, 1, -6);
-                    BorderColor3 = rgb(0, 0, 0);
-                    Size = dim2(0, 0, 0, 5);
-                    BackgroundTransparency = 1;
-                    BorderSizePixel = 0;
-                    BackgroundColor3 = themes.preset.accent
-                });
-                
-                library:create( "UICorner" , {
-                    Parent = items[ "bar" ];
-                    CornerRadius = dim(0, 999)
-                });
-                
-                library:create( "UIPadding" , {
-                    PaddingRight = dim(0, 8);
-                    Parent = items[ "notification" ]
-                });
-            end
-            
-            local index = #notifications.notifs + 1
-            notifications.notifs[index] = items[ "notification" ]
+            -- Combine name + info into one message line (info is optional extra detail)
+            local message = cfg.info ~= "" and (cfg.name .. "  " .. cfg.info) or cfg.name
 
-            notifications:fade(items[ "notification" ], false)
-            
-            local offset = notifications:refresh_notifs()
+            local idx    = #notif_stack + 1
+            local startY = -(60 + (idx - 1) * STACK_GAP)
 
-            items[ "notification" ].Position = dim_offset(20, offset)
+            -- Root holder
+            local notifHolder = library:create("Frame", {
+                Name               = "\\0";
+                Size               = dim2(0, CARD_W, 0, CARD_H);
+                Position           = dim2(1, 20, 1, startY);
+                AnchorPoint        = vec2(0, 1);
+                BackgroundTransparency = 1;
+                Parent             = notif_screen;
+            })
 
-            library:tween(items[ "notification" ], {AnchorPoint = vec2(0, 0)}, Enum.EasingStyle.Quad, 1)
-            library:tween(items[ "bar" ], {Size = dim2(1, -8, 0, 5)}, Enum.EasingStyle.Quad, cfg.lifetime)
+            -- Dark card
+            local card = library:create("Frame", {
+                Size                   = dim2(1, 0, 1, 0);
+                BackgroundColor3       = rgb(18, 18, 22);
+                BackgroundTransparency = 0.05;
+                BorderSizePixel        = 0;
+                ClipsDescendants       = true;
+                Parent                 = notifHolder;
+            })
+            library:create("UICorner", { Parent = card; CornerRadius = dim(0, 10) })
+
+            -- Outer stroke
+            library:create("UIStroke", {
+                Parent      = card;
+                Color       = rgb(60, 60, 70);
+                Thickness   = 1;
+                Transparency = 0.5;
+            })
+
+            -- Accent bar
+            local accent = library:create("Frame", {
+                Size             = dim2(0, 3, 1, -12);
+                Position         = dim2(0, 8, 0, 6);
+                AnchorPoint      = vec2(0, 0);
+                BackgroundColor3 = cfg.color;
+                BorderSizePixel  = 0;
+                Parent           = card;
+            })
+            library:create("UICorner", { Parent = accent; CornerRadius = dim(1, 0) })
+
+            -- Message label
+            library:create("TextLabel", {
+                Size                   = dim2(1, -28, 1, 0);
+                Position               = dim2(0, 20, 0, 0);
+                BackgroundTransparency = 1;
+                TextColor3             = rgb(230, 230, 235);
+                TextStrokeTransparency = 1;
+                Text                   = message;
+                Font                   = Enum.Font.GothamMedium;
+                TextSize               = 13;
+                TextXAlignment         = Enum.TextXAlignment.Left;
+                TextYAlignment         = Enum.TextYAlignment.Center;
+                TextTruncate           = Enum.TextTruncate.AtEnd;
+                Parent                 = card;
+            })
+
+            -- Progress track
+            local progressBg = library:create("Frame", {
+                Size             = dim2(1, -30, 0, 2);
+                Position         = dim2(0, 20, 1, -5);
+                AnchorPoint      = vec2(0, 1);
+                BackgroundColor3 = rgb(40, 40, 50);
+                BorderSizePixel  = 0;
+                Parent           = card;
+            })
+            library:create("UICorner", { Parent = progressBg; CornerRadius = dim(1, 0) })
+
+            local progressBar = library:create("Frame", {
+                Size             = dim2(1, 0, 1, 0);
+                BackgroundColor3 = cfg.color;
+                BorderSizePixel  = 0;
+                Parent           = progressBg;
+            })
+            library:create("UICorner", { Parent = progressBar; CornerRadius = dim(1, 0) })
+
+            -- Slide in
+            tween_service:Create(notifHolder,
+                TweenInfo.new(0.3, Enum.EasingStyle.Quint, Enum.EasingDirection.Out),
+                { Position = dim2(1, -(CARD_W + 12), 1, startY) }
+            ):Play()
+
+            -- Shrink progress bar
+            tween_service:Create(progressBar,
+                TweenInfo.new(cfg.lifetime, Enum.EasingStyle.Linear),
+                { Size = dim2(0, 0, 1, 0) }
+            ):Play()
+
+            notif_stack[idx] = notifHolder
 
             task.spawn(function()
                 task.wait(cfg.lifetime)
-                
-                notifications.notifs[index] = nil
-                
-                notifications:fade(items[ "notification" ], true)
-                
-                library:tween(items[ "notification" ], {AnchorPoint = vec2(1, 0)}, Enum.EasingStyle.Quad, 1)
 
-                task.wait(1)
-        
-                items[ "notification" ]:Destroy() 
+                -- Slide out
+                local tweenOut = tween_service:Create(notifHolder,
+                    TweenInfo.new(0.25, Enum.EasingStyle.Quint, Enum.EasingDirection.In),
+                    { Position = dim2(1, 20, 1, notifHolder.Position.Y.Offset) }
+                )
+                tweenOut:Play()
+                tweenOut.Completed:Wait()
+                notifHolder:Destroy()
+
+                for i, v in ipairs(notif_stack) do
+                    if v == notifHolder then table.remove(notif_stack, i) break end
+                end
+                restack_notifs()
             end)
         end
     --
