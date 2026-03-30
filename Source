@@ -2840,17 +2840,19 @@
                 local absolute_pos = items["sat"].AbsolutePosition
                 local absolute_size = items["sat"].AbsoluteSize
                 
+                local scale = items["colorpicker_holder"]:FindFirstChild("MobileScale") and items["colorpicker_holder"].MobileScale.Scale or 1
+
                 if dragging_sat then	
-                    s = math.clamp((input_pos.X - absolute_pos.X) / absolute_size.X, 0, 1)
-                    v = 1 - math.clamp((input_pos.Y - absolute_pos.Y) / absolute_size.Y, 0, 1)
+                    s = math.clamp((input_pos.X - absolute_pos.X) / (absolute_size.X * scale), 0, 1)
+                    v = 1 - math.clamp((input_pos.Y - absolute_pos.Y) / (absolute_size.Y * scale), 0, 1)
                 elseif dragging_hue then
                     local h_pos = items["hue_gradient"].AbsolutePosition
                     local h_size = items["hue_gradient"].AbsoluteSize
-                    h = math.clamp((input_pos.X - h_pos.X) / h_size.X, 0, 1)
+                    h = math.clamp((input_pos.X - h_pos.X) / (h_size.X * scale), 0, 1)
                 elseif dragging_alpha then
                     local a_pos = items["alpha_gradient"].AbsolutePosition
                     local a_size = items["alpha_gradient"].AbsoluteSize
-                    a = 1 - math.clamp((input_pos.X - a_pos.X) / a_size.X, 0, 1)
+                    a = 1 - math.clamp((input_pos.X - a_pos.X) / (a_size.X * scale), 0, 1)
                 end
 
                 cfg.set()
