@@ -1,7 +1,7 @@
 --[[
 
     Milenium Library
-    -> Made by @finobe
+    -> Made by @finobe 
     -> Kind of got bored idk what to do with life
     -> Idk who or why this got leaked, ui was VERY popular and high in demand with customers
 ]]
@@ -1908,12 +1908,11 @@
 
             library:connection(uis.InputChanged, function(input)
                 if cfg.dragging and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then 
-                    local scale = items["main"]:FindFirstChild("MobileScale") and items["main"].MobileScale.Scale or 1
-                    local size_x = (input.Position.X - items[ "slider" ].AbsolutePosition.X) / (items[ "slider" ].AbsoluteSize.X / scale)
-                    
-                    if input.UserInputType == Enum.UserInputType.Touch then
-                        size_x = (input.Position.X - items[ "slider" ].AbsolutePosition.X) / items[ "slider" ].AbsoluteSize.X
-                    end
+                    local size_x = (input.Position.X - items[ "slider" ].AbsolutePosition.X) / items[ "slider" ].AbsoluteSize.X
+                    local value = ((cfg.max - cfg.min) * size_x) + cfg.min
+                    cfg.set(value)
+                end
+            end)
 
                     local value = ((cfg.max - cfg.min) * size_x) + cfg.min
                     cfg.set(value)
@@ -2849,16 +2848,16 @@
                 local scale = items["colorpicker_holder"]:FindFirstChild("MobileScale") and items["colorpicker_holder"].MobileScale.Scale or 1
 
                 if dragging_sat then	
-                    s = math.clamp((input_pos.X - absolute_pos.X) / absolute_size.X, 0, 1)
-                    v = 1 - math.clamp((input_pos.Y - absolute_pos.Y) / absolute_size.Y, 0, 1)
+                    s = math.clamp((input_pos.X - absolute_pos.X) / (absolute_size.X * scale), 0, 1)
+                    v = 1 - math.clamp((input_pos.Y - absolute_pos.Y) / (absolute_size.Y * scale), 0, 1)
                 elseif dragging_hue then
                     local h_pos = items["hue_gradient"].AbsolutePosition
                     local h_size = items["hue_gradient"].AbsoluteSize
-                    h = math.clamp((input_pos.X - h_pos.X) / h_size.X, 0, 1)
+                    h = math.clamp((input_pos.X - h_pos.X) / (h_size.X * scale), 0, 1)
                 elseif dragging_alpha then
                     local a_pos = items["alpha_gradient"].AbsolutePosition
                     local a_size = items["alpha_gradient"].AbsoluteSize
-                    a = 1 - math.clamp((input_pos.X - a_pos.X) / a_size.X, 0, 1)
+                    a = 1 - math.clamp((input_pos.X - a_pos.X) / (a_size.X * scale), 0, 1)
                 end
 
                 cfg.set()
