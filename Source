@@ -3332,6 +3332,7 @@
             end
         
             items[ "keybind_holder" ].MouseButton1Down:Connect(function()
+                if uis.TouchEnabled or uis:GetPlatform() == Enum.Platform.IOS or uis:GetPlatform() == Enum.Platform.Android then return end
                 task.wait()
                 items[ "key" ].Text = "..."	
 
@@ -3344,6 +3345,7 @@
             end)
 
             items[ "keybind_holder" ].MouseButton2Down:Connect(function()
+                if uis.TouchEnabled or uis:GetPlatform() == Enum.Platform.IOS or uis:GetPlatform() == Enum.Platform.Android then return end
                 cfg.open = not cfg.open 
 
                 cfg.set_visible(cfg.open)
