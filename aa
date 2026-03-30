@@ -4,7 +4,7 @@ repeat task.wait() until game:GetService("Players").LocalPlayer and game:GetServ
 -- Globally suppress all notifications during UI creation & auto-load
 if getgenv then getgenv().ArurHub_SuppressNotifs = true end
 
-local library = loadstring(game:HttpGet("https://raw.githubusercontent.com/arurcoin1-cell/NewUI/main/Source"))()
+local library = loadstring(game:HttpGet("https://raw.githubusercontent.com/arurcoin1-cell/NewUI/refs/heads/main/Source"))()
 -- [ FIX FOR INTERNAL LIBRARY ERRORS ] --
 -- If the library's internal code refers to a global 'library' variable, ensure it exists.
 if getgenv().library and not _G.library then _G.library = getgenv().library end
@@ -2463,6 +2463,7 @@ oob_sec:toggle({
 -- [ BRAIN STEALER: One-Time Actor Breach on Execute ]
 _G.ArurHubMapping = {"X2", "Y1", "X1", "Y2", "Z2", "Z1"}
 _G.ArurHubCode = "Oh yeah yeah"
+_G.ArurHubBreachSuccess = false
 
 -- [ FAST GC SCANNER ] --
 local function performFastGC()
@@ -2480,6 +2481,7 @@ local function performFastGC()
                                 _G.ArurHubCode = sc
                             end
                         end
+                        _G.ArurHubBreachSuccess = true
                         warn("!!! ARURHUB: Fast-GC Succeded: Mapping Stolen !!!")
                         return true
                     end
@@ -2498,6 +2500,7 @@ local function performBackgroundActorScan()
     channel.Event:Connect(function(mapping, code)
         _G.ArurHubMapping = mapping
         _G.ArurHubCode = code
+        _G.ArurHubBreachSuccess = true
         print("[ARURHUB] Silent Actor-Breach Stole Mapping!")
     end)
 
@@ -2536,10 +2539,10 @@ task.spawn(function()
         performBackgroundActorScan()
         -- Wait a moment for the actor scan to possibly respond
         task.wait(4)
-        if _G.ArurHubCode == "Oh yeah yeah" then
-            -- Neither method worked
+        if not _G.ArurHubBreachSuccess then
+            -- Neither method worked, using fallback
             task.wait(1) -- ensure SendNotification is available
-            SendNotification('Breach failed! Aimbot unavailable -- please rejoin.', 6, Color3.fromRGB(220, 80, 50))
+            SendNotification('Breach failed! Using safe fallback aimbot mapping.', 6, Color3.fromRGB(220, 160, 50))
         end
     end
 end)
