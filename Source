@@ -547,7 +547,7 @@
                     
                     toggle_btn.MouseButton1Click:Connect(function()
                         items["main"].Visible = not items["main"].Visible
-                        library:close_element() -- Sync: Close gears/dropdowns when toggling
+                        cfg.toggle_menu(items["main"].Visible) -- Fully sync with PC logic (hides ScreenGui and closes elements)
                     end)
                     
                     library:draggify(toggle_btn) -- [ ENABLES DRAGGING FOR TOGGLE BUTTON ] --                    
@@ -1900,7 +1900,13 @@
 
             library:connection(uis.InputChanged, function(input)
                 if cfg.dragging and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then 
-                    local size_x = (input.Position.X - items[ "slider" ].AbsolutePosition.X) / items[ "slider" ].AbsoluteSize.X
+                    local scale = items["main"]:FindFirstChild("MobileScale") and items["main"].MobileScale.Scale or 1
+                    local size_x = (input.Position.X - items[ "slider" ].AbsolutePosition.X) / (items[ "slider" ].AbsoluteSize.X / scale)
+                    
+                    if input.UserInputType == Enum.UserInputType.Touch then
+                        size_x = (input.Position.X - items[ "slider" ].AbsolutePosition.X) / items[ "slider" ].AbsoluteSize.X
+                    end
+
                     local value = ((cfg.max - cfg.min) * size_x) + cfg.min
                     cfg.set(value)
                 end
@@ -2831,6 +2837,8 @@
             function cfg.update_color(input_pos) 
                 local absolute_pos = items["sat"].AbsolutePosition
                 local absolute_size = items["sat"].AbsoluteSize
+                
+                local scale = items["colorpicker_holder"]:FindFirstChild("MobileScale") and items["colorpicker_holder"].MobileScale.Scale or 1
 
                 if dragging_sat then	
                     s = math.clamp((input_pos.X - absolute_pos.X) / absolute_size.X, 0, 1)
@@ -3526,12 +3534,12 @@
                 library:tween(items[ "outline" ], {Size = dim_offset(bool and 240 or 0, 0)})
                 
                 if bool then
-                    items[ "outline" ].Position = dim_offset(items[ "tick" ].AbsolutePosition.X, items[ "tick" ].AbsolutePosition.Y + 90)
+                    items[ "outline" ].Position = dim_offset(items[ "tick" ].AbsolutePosition.X, items[ "tick" ].AbsolutePosition.Y + 70)
                     
                     if not cfg.pinned_connection then
                         cfg.pinned_connection = run.Heartbeat:Connect(function()
                             if items[ "outline" ].Visible and cfg.open then
-                                items[ "outline" ].Position = dim_offset(items[ "tick" ].AbsolutePosition.X, items[ "tick" ].AbsolutePosition.Y + 90)
+                                items[ "outline" ].Position = dim_offset(items[ "tick" ].AbsolutePosition.X, items[ "tick" ].AbsolutePosition.Y + 70)
                             else
                                 if cfg.pinned_connection then
                                     cfg.pinned_connection:Disconnect()
