@@ -69,6 +69,7 @@
 -- Library init
     getgenv().library = {
         directory = "milenium",
+        subfolder = tostring(game.PlaceId),
         folders = {
             "/fonts",
             "/configs",
@@ -78,6 +79,7 @@
         connections = {},   
         notifications = {notifs = {}},
         settings_items = {},
+        linked_keybind_cfgs = {},
         current_open; 
     }
 
@@ -155,6 +157,14 @@
 
     for _, path in next, library.folders do 
         makefolder(library.directory .. path)
+    end
+
+    -- Build per-game subfolder
+    if library.subfolder and library.subfolder ~= "" then
+        local sub_path = library.directory .. "/configs/" .. library.subfolder
+        if not isfolder(sub_path) then
+            makefolder(sub_path)
+        end
     end
 
     local flags = library.flags 
@@ -358,17 +368,32 @@
         end
 
         local config_holder;
+
+        function library:get_config_folder()
+            local base = library.directory .. "/configs"
+            if library.subfolder and library.subfolder ~= "" then
+                local sub = base .. "/" .. library.subfolder
+                if not isfolder(sub) then
+                    makefolder(sub)
+                end
+                return sub
+            end
+            return base
+        end
+
         function library:update_config_list() 
             if not config_holder then 
                 return 
             end
             
             local list = {}
-            local folder = library.directory .. "/configs"
+            local folder = library:get_config_folder()
             
             for idx, file in listfiles(folder) do
-                local name = file:match("([^/\\]+)$"):gsub("%.cfg$", "")
-                list[#list + 1] = name
+                if file:sub(-4) == ".cfg" then
+                    local name = file:match("([^/\\]+)$"):gsub("%.cfg$", "")
+                    list[#list + 1] = name
+                end
             end
 
             config_holder.refresh_options(list)
@@ -409,8 +434,79 @@
                         function_set(v)
                     end
                 end 
-            end 
+            end
+
+            -- Sync keybind active states from their linked toggles so that
+            -- pressing a key after loading a config correctly toggles off when
+            -- the toggle was enabled via checkbox (not keybind) before saving.
+            for _, kb_cfg in ipairs(library.linked_keybind_cfgs) do
+                local toggle_flag = kb_cfg.linked_toggle
+                if toggle_flag then
+                    local toggle_val = library.flags[toggle_flag]
+                    if type(toggle_val) == "boolean" then
+                        kb_cfg.active = toggle_val
+                    end
+                end
+            end
         end 
+
+        function library:save_config(name)
+            if not name or name == "" then return false, "no config name" end
+            local path = library:get_config_folder() .. "/" .. name .. ".cfg"
+            writefile(path, library:get_config())
+            return true
+        end
+
+        function library:load_config_file(name)
+            if not name or name == "" then return false, "no config name" end
+            local path = library:get_config_folder() .. "/" .. name .. ".cfg"
+            if not isfile(path) then return false, "file not found" end
+            library:load_config(readfile(path))
+            return true
+        end
+
+        function library:delete_config(name)
+            if not name or name == "" then return false, "no config name" end
+            local path = library:get_config_folder() .. "/" .. name .. ".cfg"
+            if not isfile(path) then return false, "file not found" end
+            delfile(path)
+            return true
+        end
+
+        function library:get_autoload_path()
+            return library:get_config_folder() .. "/autoload.txt"
+        end
+
+        function library:get_autoload_config()
+            local path = library:get_autoload_path()
+            if isfile(path) then
+                local ok, name = pcall(readfile, path)
+                if ok and name and name ~= "" then
+                    return name
+                end
+            end
+            return nil
+        end
+
+        function library:set_autoload_config(name)
+            writefile(library:get_autoload_path(), name or "")
+        end
+
+        function library:clear_autoload_config()
+            local path = library:get_autoload_path()
+            if isfile(path) then
+                pcall(delfile, path)
+            end
+        end
+
+        function library:load_autoload_config()
+            local name = library:get_autoload_config()
+            if name then
+                local ok, err = library:load_config_file(name)
+                return ok, name
+            end
+            return false, nil
+        end
         
         function library:round(number, float) 
             local multiplier = 1 / (float or 1)
@@ -3055,6 +3151,7 @@
                 callback = options.callback or function() end,
                 name = options.name or nil, 
                 ignore_key = options.ignore or false, 
+                linked_toggle = options.linked_toggle or nil,
 
                 key = options.key or nil, 
                 mode = options.mode or "Toggle",
@@ -3313,6 +3410,14 @@
 
                 cfg.callback(cfg.active)
 
+                -- Drive linked toggle if specified
+                if cfg.linked_toggle then
+                    local setter = config_flags[cfg.linked_toggle]
+                    if setter then
+                        setter(cfg.active)
+                    end
+                end
+
                 local text = tostring(cfg.key) ~= "Enums" and (keys[cfg.key] or tostring(cfg.key):gsub("Enum.", "")) or nil
                 local __text = text and (tostring(text):gsub("KeyCode.", ""):gsub("UserInputType.", ""))
                 
@@ -3383,6 +3488,10 @@
             
             cfg.set({mode = cfg.mode, active = cfg.active, key = cfg.key})           
             config_flags[cfg.flag] = cfg.set
+
+            if cfg.linked_toggle then
+                table.insert(library.linked_keybind_cfgs, cfg)
+            end
 
             return setmetatable(cfg, library)
         end
@@ -3694,8 +3803,8 @@
                 -- Refresh dot to reflect whether this config is the auto-load target
                 task.defer(function()
                     if autoload_dot then
-                        local ok, current = pcall(readfile, "arurhub_autoload.txt")
-                        if ok and current and current == option then
+                        local current = library:get_autoload_config()
+                        if current and current == option then
                             autoload_dot.BackgroundColor3 = Color3.fromRGB(80, 210, 120) -- green
                         else
                             autoload_dot.BackgroundColor3 = Color3.fromRGB(180, 60, 60)  -- red
@@ -3711,7 +3820,7 @@
             section:button({name = "Save", callback = function() 
                 local name = (flags["config_name_text"] ~= "" and flags["config_name_text"]) or flags["config_name_list"]
                 if name and name ~= "" then
-                    writefile(library.directory .. "/configs/" .. name .. ".cfg", library:get_config()) 
+                    library:save_config(name)
                     library:update_config_list() 
                     notifications:create_notification({name = "Saved: " .. name, color = Color3.fromRGB(80, 220, 120)}) 
                 end
@@ -3721,7 +3830,7 @@
                 local name = flags["config_name_list"]
                 if name and name ~= "" then
                     if getgenv then getgenv().ArurHub_SuppressNotifs = true end
-                    library:load_config(readfile(library.directory .. "/configs/" .. name .. ".cfg"))  
+                    library:load_config_file(name)
                     library:update_config_list()
                     if getgenv then getgenv().ArurHub_SuppressNotifs = false end
                     notifications:create_notification({name = "Loaded: " .. name, color = Color3.fromRGB(130, 120, 255)}) 
@@ -3731,23 +3840,27 @@
             section:button({name = "Delete", callback = function() 
                 local name = flags["config_name_list"]
                 if name and name ~= "" then
-                    delfile(library.directory .. "/configs/" .. name .. ".cfg")  
+                    library:delete_config(name)
                     library:update_config_list() 
                     notifications:create_notification({name = "Deleted: " .. name, color = Color3.fromRGB(220, 80, 80)})
                 end
             end})
 
-            local autoload_btn = section:button({name = "Auto Load", callback = function()
+            section:button({name = "Refresh", callback = function()
+                library:update_config_list()
+                notifications:create_notification({name = "Config list refreshed", color = Color3.fromRGB(130, 120, 255)})
+            end})
+
+            local autoload_btn = section:button({name = "Set Autoload", callback = function()
                 local name = flags["config_name_list"]
                 if name and name ~= "" then
-                    local autoloadFile = "arurhub_autoload.txt"
-                    local ok, current = pcall(readfile, autoloadFile)
-                    if ok and current == name then
-                        writefile(autoloadFile, "")
+                    local current = library:get_autoload_config()
+                    if current and current == name then
+                        library:clear_autoload_config()
                         if autoload_dot then autoload_dot.BackgroundColor3 = Color3.fromRGB(180, 60, 60) end
                         notifications:create_notification({name = "Auto Load OFF: " .. name, color = Color3.fromRGB(220, 80, 80)})
                     else
-                        writefile(autoloadFile, name)
+                        library:set_autoload_config(name)
                         if autoload_dot then autoload_dot.BackgroundColor3 = Color3.fromRGB(80, 210, 120) end
                         notifications:create_notification({name = "Auto Load ON: " .. name, color = Color3.fromRGB(80, 220, 120)})
                     end
@@ -3771,8 +3884,8 @@
                     library:create("UICorner", { Parent = autoload_dot; CornerRadius = dim(1, 0) })
 
                     -- Read current state and set dot color
-                    local ok, current = pcall(readfile, "arurhub_autoload.txt")
-                    if ok and current and current ~= "" then
+                    local current = library:get_autoload_config()
+                    if current then
                         autoload_dot.BackgroundColor3 = Color3.fromRGB(80, 210, 120)
                     end
                 end
