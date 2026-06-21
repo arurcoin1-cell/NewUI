@@ -443,8 +443,8 @@
                 local toggle_flag = kb_cfg.linked_toggle
                 if toggle_flag then
                     local toggle_val = library.flags[toggle_flag]
-                    if type(toggle_val) == "boolean" then 
-                       kb_cfg.active = toggle_val
+                    if type(toggle_val) == "boolean" then
+                        kb_cfg.active = toggle_val
                     end
                 end
             end
