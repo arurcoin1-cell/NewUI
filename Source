@@ -3457,20 +3457,33 @@
                 cfg.set_visible(cfg.open)
             end)
 
-            library:connection(uis.InputBegan, function(input, game_event) 
+            library:connection(uis.InputBegan, function(input, game_event)
                 if not game_event then
                     local selected_key = input.UserInputType == Enum.UserInputType.Keyboard and input.KeyCode or input.UserInputType
 
-                    if selected_key == cfg.key then 
-                        if cfg.mode == "Toggle" then 
-                            cfg.active = not cfg.active
+                    if selected_key == cfg.key then
+                        if cfg.mode == "Toggle" then
+                            -- Flip from whatever the LINKED TOGGLE currently
+                            -- is, not from cfg.active.  Otherwise the keybind
+                            -- drifts out of sync the moment the user clicks
+                            -- the toggle checkbox manually (keybind cfg.active
+                            -- still false, toggle true -> first press flips
+                            -- keybind to true and writes true to the toggle,
+                            -- which is a no-op visually; user has to press
+                            -- again to actually turn it off).
+                            local current = cfg.active
+                            if cfg.linked_toggle then
+                                local lv = library.flags[cfg.linked_toggle]
+                                if type(lv) == "boolean" then current = lv end
+                            end
+                            cfg.active = not current
                             cfg.set(cfg.active)
-                        elseif cfg.mode == "Hold" then 
+                        elseif cfg.mode == "Hold" then
                             cfg.set(true)
                         end
                     end
                 end
-            end)    
+            end)
 
             library:connection(uis.InputEnded, function(input, game_event) 
                 if game_event then 
