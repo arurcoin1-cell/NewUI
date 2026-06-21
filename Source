@@ -3408,6 +3408,8 @@
                     cfg.set_mode(cfg.mode) 
                 end 
 
+                cfg.callback(cfg.active)
+
                 -- Drive linked toggle if specified
                 if cfg.linked_toggle then
                     local setter = config_flags[cfg.linked_toggle]
