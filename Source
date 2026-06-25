@@ -3917,11 +3917,11 @@
                 local scale = library:create("UIScale", {
                     Name = "MobileScale",
                     Parent = object,
-                    Scale = math.clamp(camera.ViewportSize.Y / 750, 0.45, 0.95)
+                    Scale = math.clamp(camera.ViewportSize.Y / 750 * 1.2, 0.45, 1.15)
                 }) 
                 
                 library:connection(camera:GetPropertyChangedSignal("ViewportSize"), function()
-                    scale.Scale = math.clamp(camera.ViewportSize.Y / 750, 0.45, 0.95)
+                    scale.Scale = math.clamp(camera.ViewportSize.Y / 750 * 1.2, 0.45, 1.15)
                 end)
             end 
         end 
